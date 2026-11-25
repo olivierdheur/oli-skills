@@ -311,3 +311,27 @@
     transform: none;
   }
 }
+
+pre,
+pre * {
+  color: #e4e4e7 !important;
+}
+
+pre code {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+.prose pre {
+  background-color: #18181b !important;
+  color: #e4e4e7 !important;
+}
+
+.prose pre code {
+  background: transparent !important;
+  color: #e4e4e7 !important;
+}
+
+.prose pre code * {
+  color: inherit !important;
+}

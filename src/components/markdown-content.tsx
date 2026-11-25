@@ -53,13 +53,13 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
             );
           }
           return (
-            <code className={className} {...props}>
+            <code className={`${className || ''} text-zinc-100 block`} {...props}>
               {children}
             </code>
           );
         },
         pre: ({ children }) => (
-          <pre className="bg-zinc-900 dark:bg-zinc-800 text-zinc-100 p-4 rounded-lg overflow-x-auto text-sm border border-zinc-700">
+          <pre className="bg-zinc-900 dark:bg-zinc-950 text-zinc-100 p-4 rounded-lg overflow-x-auto text-sm border border-zinc-700 [&_*]:text-zinc-100 [&_code]:bg-transparent">
             {children}
           </pre>
         ),
