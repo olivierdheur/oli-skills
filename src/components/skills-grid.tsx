@@ -15,6 +15,7 @@ interface Skill {
   name: string;
   description: string;
   source: string;
+  category: string;
 }
 
 const sourceColors = {
@@ -30,9 +31,35 @@ const sourceColors = {
   },
 };
 
+const categoryIcons: Record<string, string> = {
+  "Animation": "🎬",
+  "UI/Design": "🎨",
+  "Security": "🔒",
+  "Writing": "✍️",
+  "Testing": "🧪",
+  "Backend": "⚙️",
+  "Frontend": "🖥️",
+  "AI/Agents": "🤖",
+  "DevOps": "🚀",
+  "Architecture": "🏗️",
+  "Languages": "📝",
+  "Other": "📦",
+};
+
 export function SkillsGrid({ skills }: { skills: Skill[] }) {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+
+  const categories = useMemo(() => {
+    const categoryCount = new Map<string, number>();
+    for (const skill of skills) {
+      categoryCount.set(skill.category, (categoryCount.get(skill.category) || 0) + 1);
+    }
+    return Array.from(categoryCount.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [skills]);
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
@@ -41,9 +68,10 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
         skill.name.toLowerCase().includes(search.toLowerCase()) ||
         skill.description.toLowerCase().includes(search.toLowerCase());
       const matchesSource = !sourceFilter || skill.source === sourceFilter;
-      return matchesSearch && matchesSource;
+      const matchesCategory = !categoryFilter || skill.category === categoryFilter;
+      return matchesSearch && matchesSource && matchesCategory;
     });
-  }, [skills, search, sourceFilter]);
+  }, [skills, search, sourceFilter, categoryFilter]);
 
   const eccCount = skills.filter((s) => s.source === "cursor").length;
   const emilCount = skills.filter((s) => s.source === "agents").length;
@@ -75,6 +103,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mr-1">Source:</span>
           <button
             onClick={() => setSourceFilter(null)}
             className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
@@ -105,6 +134,35 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
           >
             Emil ({emilCount})
           </button>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mr-1">Category:</span>
+          <button
+            onClick={() => setCategoryFilter(null)}
+            className={`nav-button px-2.5 py-1 rounded-md text-xs font-medium ${
+              !categoryFilter
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            }`}
+          >
+            All
+          </button>
+          {categories.map(({ name, count }) => (
+            <button
+              key={name}
+              onClick={() => setCategoryFilter(categoryFilter === name ? null : name)}
+              className={`nav-button px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 ${
+                categoryFilter === name
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <span>{categoryIcons[name] || "📦"}</span>
+              <span>{name}</span>
+              <span className="text-zinc-400 dark:text-zinc-500">({count})</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -137,9 +195,14 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
                           {skill.name}
                         </CardTitle>
                       </div>
-                      <Badge variant="outline" className={`text-[10px] font-medium shrink-0 ${colors.badge}`}>
-                        {colors.label}
-                      </Badge>
+                      <div className="flex gap-1 shrink-0">
+                        <Badge variant="outline" className="text-[10px] font-medium bg-zinc-50 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700">
+                          {categoryIcons[skill.category]} {skill.category}
+                        </Badge>
+                        <Badge variant="outline" className={`text-[10px] font-medium ${colors.badge}`}>
+                          {colors.label}
+                        </Badge>
+                      </div>
                     </div>
                     <CardDescription className="text-sm leading-relaxed line-clamp-2 text-zinc-600 dark:text-zinc-400">
                       {skill.description}

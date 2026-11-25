@@ -39,7 +39,7 @@ export default function Home() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        <SkillsGrid skills={skills.map(s => ({ slug: s.slug, name: s.name, description: s.description, source: s.source }))} />
+        <SkillsGrid skills={skills.map(s => ({ slug: s.slug, name: s.name, description: s.description, source: s.source, category: s.category }))} />
       </main>
 
       <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 py-6 mt-8">
