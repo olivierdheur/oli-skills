@@ -61,6 +61,10 @@ const categoryPatterns: { category: string; patterns: RegExp[] }[] = [
     category: "Workflow",
     patterns: [/brainstorm/i, /plan/i, /execut/i, /finish/i, /review/i, /debug/i, /diagnos/i, /superpowers/i],
   },
+  {
+    category: "Marketing",
+    patterns: [/marketing/i, /seo/i, /cro/i, /copywriting/i, /copy/i, /ads/i, /email/i, /social/i, /landing/i, /conversion/i, /analytics/i, /content/i, /launch/i, /pricing/i, /referral/i, /churn/i, /onboard/i, /popup/i, /paywall/i, /signup/i, /ab-test/i, /competitor/i, /link-build/i, /schema/i, /programmatic/i, /site-arch/i, /aso/i, /cold-email/i, /lead/i, /sales/i, /revops/i, /influencer/i, /community/i, /event/i, /video/i, /image/i, /sms/i, /offer/i, /directory/i, /prospect/i, /attribution/i, /public-relation/i, /co-market/i, /free-tool/i],
+  },
 ];
 
 function detectCategory(name: string, description: string): string {
@@ -81,6 +85,7 @@ const SKILLS_DIRS = [
   { path: ".agents/skills", source: "agents" },
   { path: ".cursor/skills", source: "cursor" },
   { path: ".superpowers/skills", source: "superpowers" },
+  { path: ".marketing/skills", source: "marketing" },
 ];
 
 function getSkillsFromDir(dirPath: string, source: string): Skill[] {

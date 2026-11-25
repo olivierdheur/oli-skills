@@ -34,6 +34,11 @@ const sourceColors = {
     icon: "from-amber-500 to-orange-500",
     label: "Superpowers",
   },
+  marketing: {
+    badge: "border-emerald-400/50 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/50 dark:text-emerald-300",
+    icon: "from-emerald-500 to-teal-500",
+    label: "Marketing",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -49,6 +54,7 @@ const categoryIcons: Record<string, string> = {
   "Architecture": "🏗️",
   "Languages": "📝",
   "Workflow": "⚡",
+  "Marketing": "📈",
   "Other": "📦",
 };
 
@@ -82,6 +88,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
   const eccCount = skills.filter((s) => s.source === "cursor").length;
   const emilCount = skills.filter((s) => s.source === "agents").length;
   const superpowersCount = skills.filter((s) => s.source === "superpowers").length;
+  const marketingCount = skills.filter((s) => s.source === "marketing").length;
 
   return (
     <>
@@ -150,6 +157,16 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
             }`}
           >
             Superpowers ({superpowersCount})
+          </button>
+          <button
+            onClick={() => setSourceFilter("marketing")}
+            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
+              sourceFilter === "marketing"
+                ? "bg-emerald-600 text-white"
+                : "text-zinc-600 dark:text-zinc-400"
+            }`}
+          >
+            Marketing ({marketingCount})
           </button>
         </div>
 
