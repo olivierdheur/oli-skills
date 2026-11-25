@@ -2,8 +2,10 @@
   "name": "skills-browser",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "prebuild": "node scripts/generate-skills-index.js",
+    "dev": "node scripts/generate-skills-index.js && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
