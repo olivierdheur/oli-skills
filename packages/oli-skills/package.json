@@ -1,6 +1,6 @@
 {
   "name": "oli-skills",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "500+ AI agent skills for Cursor - install, search, and manage skills in any project",
   "main": "dist/index.js",
   "bin": {
@@ -23,7 +23,8 @@
   "license": "MIT",
   "files": [
     "dist",
-    "skills"
+    "skills",
+    "skills-index.json"
   ],
   "repository": {
     "type": "git",
