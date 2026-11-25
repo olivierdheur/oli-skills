@@ -9,58 +9,64 @@ export function UsageGuide() {
     <div className="mb-8">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full text-left"
+        className="filter-pill w-full text-left"
       >
-        <div className="rounded-xl border border-violet-200 dark:border-violet-800/50 bg-gradient-to-r from-violet-50 to-fuchsia-50 dark:from-violet-950/30 dark:to-fuchsia-950/30 p-4 hover:border-violet-300 dark:hover:border-violet-700 transition-colors">
+        <div className="rounded-2xl border border-violet-200/50 dark:border-violet-800/30 bg-gradient-to-r from-violet-50/80 to-fuchsia-50/80 dark:from-violet-950/20 dark:to-fuchsia-950/20 p-5 hover:border-violet-300/70 dark:hover:border-violet-700/50 transition-all backdrop-blur-sm">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center">
-                <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
               <div>
-                <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">Token-Efficient Usage</h2>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">Load only what you need to save tokens</p>
+                <h2 className="font-semibold text-zinc-900 dark:text-zinc-50 tracking-tight">Token-Efficient Usage</h2>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">Load only what you need — click to learn how</p>
               </div>
             </div>
-            <svg 
-              className={`w-5 h-5 text-zinc-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor" 
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+            <div className={`w-8 h-8 rounded-lg bg-white/80 dark:bg-zinc-800/80 flex items-center justify-center transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
+              <svg 
+                className="w-4 h-4 text-zinc-500" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor" 
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
         </div>
       </button>
 
-      {isOpen && (
-        <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-6">
+      <div 
+        className={`overflow-hidden transition-all duration-300 ease-out ${
+          isOpen ? 'max-h-[2000px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'
+        }`}
+      >
+        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm p-6 space-y-6">
           <div>
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center text-xs font-bold text-violet-600 dark:text-violet-400">1</span>
-              CLI Commands
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 mb-4 flex items-center gap-3">
+              <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-xs font-bold text-white shadow-sm">1</span>
+              <span className="tracking-tight">CLI Commands</span>
             </h3>
-            <div className="bg-zinc-950 dark:bg-zinc-950 rounded-lg p-4 font-mono text-sm overflow-x-auto">
-              <div className="text-zinc-400"># Search for skills</div>
+            <div className="bg-zinc-950 rounded-xl p-4 font-mono text-sm overflow-x-auto shadow-inner">
+              <div className="text-zinc-500"># Search for skills</div>
               <div className="text-emerald-400">./scripts/skill search animation</div>
               <div className="text-emerald-400">./scripts/skill search seo</div>
-              <div className="mt-3 text-zinc-400"># Show a skill&apos;s content</div>
+              <div className="mt-4 text-zinc-500"># Show a skill&apos;s content</div>
               <div className="text-emerald-400">./scripts/skill show animate</div>
-              <div className="mt-3 text-zinc-400"># List by source</div>
+              <div className="mt-4 text-zinc-500"># List by source</div>
               <div className="text-emerald-400">./scripts/skill list marketing</div>
-              <div className="mt-3 text-zinc-400"># See curated packs</div>
+              <div className="mt-4 text-zinc-500"># See curated packs</div>
               <div className="text-emerald-400">./scripts/skill packs</div>
             </div>
           </div>
 
           <div>
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center text-xs font-bold text-violet-600 dark:text-violet-400">2</span>
-              Workflow
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 mb-4 flex items-center gap-3">
+              <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-xs font-bold text-white shadow-sm">2</span>
+              <span className="tracking-tight">Workflow</span>
             </h3>
             <div className="grid gap-2">
               {[
@@ -70,8 +76,11 @@ export function UsageGuide() {
                 { step: "Load 1-3 skills max by reading their SKILL.md", icon: "📖" },
                 { step: "Complete task, don't carry skills to unrelated work", icon: "✅" },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
-                  <span className="text-lg">{item.icon}</span>
+                <div 
+                  key={i} 
+                  className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50"
+                >
+                  <span className="text-xl">{item.icon}</span>
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">{item.step}</span>
                 </div>
               ))}
@@ -79,35 +88,44 @@ export function UsageGuide() {
           </div>
 
           <div>
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center text-xs font-bold text-violet-600 dark:text-violet-400">3</span>
-              Common Tasks
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-50 mb-4 flex items-center gap-3">
+              <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-xs font-bold text-white shadow-sm">3</span>
+              <span className="tracking-tight">Quick Reference</span>
             </h3>
             <div className="grid gap-2 text-sm">
               {[
-                { task: "Build React component", skill: ".vercel-skills/skills/react-best-practices/SKILL.md" },
-                { task: "Add animation", skill: ".agents/skills/animate/SKILL.md" },
-                { task: "Optimize landing page", skill: ".marketing/skills/cro/SKILL.md" },
-                { task: "Write marketing copy", skill: ".marketing/skills/copywriting/SKILL.md" },
-                { task: "Plan a feature", skill: ".superpowers/skills/brainstorming/SKILL.md" },
-                { task: "Code review", skill: ".superpowers/skills/requesting-code-review/SKILL.md" },
-                { task: "SEO audit", skill: ".claude-seo/skills/seo-audit/SKILL.md" },
+                { task: "Build React component", skill: ".vercel-skills/skills/react-best-practices" },
+                { task: "Add animation", skill: ".agents/skills/animate" },
+                { task: "Optimize landing page", skill: ".marketing/skills/cro" },
+                { task: "Write marketing copy", skill: ".marketing/skills/copywriting" },
+                { task: "Plan a feature", skill: ".superpowers/skills/brainstorming" },
+                { task: "Code review", skill: ".superpowers/skills/requesting-code-review" },
+                { task: "SEO audit", skill: ".claude-seo/skills/seo-audit" },
               ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between gap-4 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
-                  <span className="text-zinc-700 dark:text-zinc-300">{item.task}</span>
-                  <code className="text-xs text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-1 rounded truncate max-w-[300px]">{item.skill}</code>
+                <div key={i} className="flex items-center justify-between gap-4 p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50 group">
+                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">{item.task}</span>
+                  <code className="text-xs text-violet-600 dark:text-violet-400 bg-violet-50/80 dark:bg-violet-900/30 px-2.5 py-1 rounded-lg truncate max-w-[280px] border border-violet-100 dark:border-violet-800/50">{item.skill}</code>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              <strong className="text-zinc-700 dark:text-zinc-300">Pro tip:</strong> Check <code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-xs">SKILLS-INDEX.md</code> for a compact list of all skills, or use the search above to find what you need.
-            </p>
+          <div className="pt-5 border-t border-zinc-200/80 dark:border-zinc-800/80">
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-r from-zinc-50 to-zinc-100/50 dark:from-zinc-800/50 dark:to-zinc-800/30 border border-zinc-200/50 dark:border-zinc-700/50">
+              <div className="w-8 h-8 rounded-lg bg-zinc-200/80 dark:bg-zinc-700/80 flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-zinc-600 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  <strong className="text-zinc-800 dark:text-zinc-200">Pro tip:</strong> Click the <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-zinc-200/80 dark:bg-zinc-700/80 rounded text-xs"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg></span> button on any skill card to copy the Cursor prompt directly.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

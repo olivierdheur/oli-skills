@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -23,36 +23,43 @@ const sourceColors = {
     badge: "border-blue-400/50 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/50 dark:text-blue-300",
     icon: "from-blue-500 to-cyan-500",
     label: "ECC",
+    active: "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25",
   },
   agents: {
     badge: "border-violet-400/50 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-950/50 dark:text-violet-300",
     icon: "from-violet-500 to-fuchsia-500",
     label: "Emil",
+    active: "bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25",
   },
   superpowers: {
     badge: "border-amber-400/50 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/50 dark:text-amber-300",
     icon: "from-amber-500 to-orange-500",
     label: "Superpowers",
+    active: "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25",
   },
   marketing: {
     badge: "border-emerald-400/50 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/50 dark:text-emerald-300",
     icon: "from-emerald-500 to-teal-500",
     label: "Marketing",
+    active: "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25",
   },
   vercel: {
     badge: "border-zinc-400/50 bg-zinc-50 text-zinc-700 dark:border-zinc-500/30 dark:bg-zinc-800/50 dark:text-zinc-300",
     icon: "from-zinc-800 to-zinc-600 dark:from-zinc-100 dark:to-zinc-300",
     label: "Vercel",
+    active: "bg-gradient-to-r from-zinc-700 to-zinc-900 text-white dark:from-zinc-200 dark:to-zinc-400 dark:text-zinc-900 shadow-lg shadow-zinc-500/25",
   },
   seo: {
     badge: "border-rose-400/50 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/50 dark:text-rose-300",
     icon: "from-rose-500 to-pink-500",
     label: "Claude SEO",
+    active: "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/25",
   },
   agency: {
     badge: "border-cyan-400/50 bg-cyan-50 text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-950/50 dark:text-cyan-300",
     icon: "from-cyan-500 to-sky-500",
     label: "Agency",
+    active: "bg-gradient-to-r from-cyan-500 to-sky-500 text-white shadow-lg shadow-cyan-500/25",
   },
 };
 
@@ -73,6 +80,47 @@ const categoryIcons: Record<string, string> = {
   "Agency": "🎭",
   "Other": "📦",
 };
+
+const sourceToPath: Record<string, string> = {
+  cursor: ".cursor/skills",
+  agents: ".agents/skills",
+  superpowers: ".superpowers/skills",
+  marketing: ".marketing/skills",
+  vercel: ".vercel-skills/skills",
+  seo: ".claude-seo/skills",
+  agency: ".agency/skills",
+};
+
+function CopyButton({ path, name }: { path: string; name: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const prompt = `Read ${path}/${name}/SKILL.md`;
+    await navigator.clipboard.writeText(prompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [path, name]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`copy-button absolute top-3 right-3 p-1.5 rounded-lg bg-zinc-100/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200/50 dark:border-zinc-700/50 ${copied ? 'copy-success' : ''}`}
+      title="Copy Cursor prompt"
+    >
+      {copied ? (
+        <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-4 h-4 text-zinc-500 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 export function SkillsGrid({ skills }: { skills: Skill[] }) {
   const [search, setSearch] = useState("");
@@ -101,165 +149,176 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
     });
   }, [skills, search, sourceFilter, categoryFilter]);
 
-  const eccCount = skills.filter((s) => s.source === "cursor").length;
-  const emilCount = skills.filter((s) => s.source === "agents").length;
-  const superpowersCount = skills.filter((s) => s.source === "superpowers").length;
-  const marketingCount = skills.filter((s) => s.source === "marketing").length;
-  const vercelCount = skills.filter((s) => s.source === "vercel").length;
-  const seoCount = skills.filter((s) => s.source === "seo").length;
-  const agencyCount = skills.filter((s) => s.source === "agency").length;
+  const sourceCounts = useMemo(() => ({
+    cursor: skills.filter((s) => s.source === "cursor").length,
+    agents: skills.filter((s) => s.source === "agents").length,
+    superpowers: skills.filter((s) => s.source === "superpowers").length,
+    marketing: skills.filter((s) => s.source === "marketing").length,
+    vercel: skills.filter((s) => s.source === "vercel").length,
+    seo: skills.filter((s) => s.source === "seo").length,
+    agency: skills.filter((s) => s.source === "agency").length,
+  }), [skills]);
+
+  const sources = [
+    { key: "cursor", label: "ECC", count: sourceCounts.cursor },
+    { key: "agents", label: "Emil", count: sourceCounts.agents },
+    { key: "superpowers", label: "Superpowers", count: sourceCounts.superpowers },
+    { key: "marketing", label: "Marketing", count: sourceCounts.marketing },
+    { key: "vercel", label: "Vercel", count: sourceCounts.vercel },
+    { key: "seo", label: "Claude SEO", count: sourceCounts.seo },
+    { key: "agency", label: "Agency", count: sourceCounts.agency },
+  ];
 
   return (
     <>
-      <div className="mb-8 space-y-4">
-        <div className="relative">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      <div className="mb-8 space-y-5">
+        <div className="relative group">
+          <div className="absolute inset-0 bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 rounded-2xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-300" />
+          <div className="relative">
+            <svg
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400 transition-colors group-focus-within:text-violet-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search 500+ skills..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="search-input w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none text-base"
             />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search skills..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-shadow"
-          />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mr-1">Source:</span>
-          <button
-            onClick={() => setSourceFilter(null)}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              !sourceFilter
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            All ({skills.length})
-          </button>
-          <button
-            onClick={() => setSourceFilter("cursor")}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              sourceFilter === "cursor"
-                ? "bg-blue-600 text-white"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            ECC ({eccCount})
-          </button>
-          <button
-            onClick={() => setSourceFilter("agents")}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              sourceFilter === "agents"
-                ? "bg-violet-600 text-white"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            Emil ({emilCount})
-          </button>
-          <button
-            onClick={() => setSourceFilter("superpowers")}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              sourceFilter === "superpowers"
-                ? "bg-amber-600 text-white"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            Superpowers ({superpowersCount})
-          </button>
-          <button
-            onClick={() => setSourceFilter("marketing")}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              sourceFilter === "marketing"
-                ? "bg-emerald-600 text-white"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            Marketing ({marketingCount})
-          </button>
-          <button
-            onClick={() => setSourceFilter("vercel")}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              sourceFilter === "vercel"
-                ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            Vercel ({vercelCount})
-          </button>
-          <button
-            onClick={() => setSourceFilter("seo")}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              sourceFilter === "seo"
-                ? "bg-rose-600 text-white"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            Claude SEO ({seoCount})
-          </button>
-          <button
-            onClick={() => setSourceFilter("agency")}
-            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
-              sourceFilter === "agency"
-                ? "bg-cyan-600 text-white"
-                : "text-zinc-600 dark:text-zinc-400"
-            }`}
-          >
-            Agency ({agencyCount})
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mr-1">Category:</span>
-          <button
-            onClick={() => setCategoryFilter(null)}
-            className={`nav-button px-2.5 py-1 rounded-md text-xs font-medium ${
-              !categoryFilter
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            }`}
-          >
-            All
-          </button>
-          {categories.map(({ name, count }) => (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Source</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-zinc-200 dark:from-zinc-800 to-transparent" />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              key={name}
-              onClick={() => setCategoryFilter(categoryFilter === name ? null : name)}
-              className={`nav-button px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 ${
-                categoryFilter === name
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              onClick={() => setSourceFilter(null)}
+              className={`filter-pill px-4 py-2 rounded-xl text-sm font-medium ${
+                !sourceFilter
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-lg"
+                  : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
               }`}
             >
-              <span>{categoryIcons[name] || "📦"}</span>
-              <span>{name}</span>
-              <span className="text-zinc-400 dark:text-zinc-500">({count})</span>
+              All
+              <span className="ml-1.5 text-xs opacity-70">{skills.length}</span>
             </button>
-          ))}
+            {sources.map(({ key, label, count }) => {
+              const colors = sourceColors[key as keyof typeof sourceColors];
+              const isActive = sourceFilter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSourceFilter(isActive ? null : key)}
+                  className={`filter-pill px-4 py-2 rounded-xl text-sm font-medium ${
+                    isActive
+                      ? colors.active
+                      : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
+                  }`}
+                >
+                  {label}
+                  <span className="ml-1.5 text-xs opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Category</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-zinc-200 dark:from-zinc-800 to-transparent" />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setCategoryFilter(null)}
+              className={`filter-pill px-3 py-1.5 rounded-lg text-xs font-medium ${
+                !categoryFilter
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
+                  : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
+              }`}
+            >
+              All
+            </button>
+            {categories.map(({ name, count }) => (
+              <button
+                key={name}
+                onClick={() => setCategoryFilter(categoryFilter === name ? null : name)}
+                className={`filter-pill px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ${
+                  categoryFilter === name
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
+                    : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
+                }`}
+              >
+                <span>{categoryIcons[name] || "📦"}</span>
+                <span>{name}</span>
+                <span className="opacity-60">{count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {(search || sourceFilter || categoryFilter) && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Showing <span className="font-semibold text-zinc-900 dark:text-zinc-100">{filteredSkills.length}</span> of {skills.length} skills
+            </p>
+            <button
+              onClick={() => {
+                setSearch("");
+                setSourceFilter(null);
+                setCategoryFilter(null);
+              }}
+              className="text-sm text-violet-600 dark:text-violet-400 font-medium hover:underline"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
       </div>
 
       {filteredSkills.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredSkills.map((skill) => {
+          {filteredSkills.map((skill, index) => {
             const colors = sourceColors[skill.source as keyof typeof sourceColors] || sourceColors.agents;
+            const path = sourceToPath[skill.source] || ".agents/skills";
+            const staggerDelay = Math.min(index * 30, 300);
+            
             return (
-              <Link key={skill.slug} href={`/skill/${skill.slug}`}>
-                <Card className="skill-card h-full cursor-pointer border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/50">
-                  <CardHeader className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
+              <Link 
+                key={skill.slug} 
+                href={`/skill/${skill.slug}`}
+                className="skill-card-enter"
+                style={{ animationDelay: `${staggerDelay}ms` }}
+              >
+                <Card className="skill-card relative h-full cursor-pointer border-zinc-200/80 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/70 backdrop-blur-sm overflow-hidden group">
+                  <CopyButton path={path} name={skill.name} />
+                  <CardHeader className="space-y-3 pb-4">
+                    <div className="flex items-start justify-between gap-2 pr-8">
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${colors.icon} flex items-center justify-center shadow-sm`}>
+                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${colors.icon} flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow`}>
                           <svg
                             className="w-4 h-4 text-white"
                             fill="none"
@@ -274,24 +333,24 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
                             />
                           </svg>
                         </div>
-                        <CardTitle className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                        <CardTitle className="text-base font-semibold text-zinc-900 dark:text-zinc-50 tracking-tight">
                           {skill.name}
                         </CardTitle>
                       </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Badge variant="outline" className="text-[10px] font-medium bg-zinc-50 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700">
-                          {categoryIcons[skill.category]} {skill.category}
-                        </Badge>
-                        <Badge variant="outline" className={`text-[10px] font-medium ${colors.badge}`}>
-                          {colors.label}
-                        </Badge>
-                      </div>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <Badge variant="outline" className="text-[10px] font-medium bg-zinc-50/80 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200/80 dark:border-zinc-700/50">
+                        {categoryIcons[skill.category]} {skill.category}
+                      </Badge>
+                      <Badge variant="outline" className={`text-[10px] font-medium ${colors.badge}`}>
+                        {colors.label}
+                      </Badge>
                     </div>
                     <CardDescription className="text-sm leading-relaxed line-clamp-2 text-zinc-600 dark:text-zinc-400">
                       {skill.description}
                     </CardDescription>
-                    <div className="pt-1">
-                      <code className="text-xs text-zinc-500 dark:text-zinc-500 font-mono">
+                    <div className="pt-1 flex items-center gap-2">
+                      <code className="text-xs text-zinc-400 dark:text-zinc-500 font-mono bg-zinc-100/80 dark:bg-zinc-800/50 px-2 py-0.5 rounded">
                         /{skill.name}
                       </code>
                     </div>
@@ -302,10 +361,10 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
           })}
         </div>
       ) : (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-4">
+        <div className="empty-state text-center py-20">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center mx-auto mb-6 shadow-inner">
             <svg
-              className="w-8 h-8 text-zinc-400"
+              className="w-10 h-10 text-zinc-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -318,12 +377,22 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
               />
             </svg>
           </div>
-          <p className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-1">
+          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2 tracking-tight">
             No skills found
           </p>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Try a different search term or filter
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+            Try a different search term or filter combination
           </p>
+          <button
+            onClick={() => {
+              setSearch("");
+              setSourceFilter(null);
+              setCategoryFilter(null);
+            }}
+            className="filter-pill px-5 py-2.5 rounded-xl text-sm font-medium bg-violet-600 text-white shadow-lg shadow-violet-500/25 hover:bg-violet-700 transition-colors"
+          >
+            Clear all filters
+          </button>
         </div>
       )}
     </>
