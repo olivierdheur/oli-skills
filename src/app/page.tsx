@@ -67,11 +67,14 @@ export default function Home() {
                     <CardTitle className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
                       {skill.name}
                     </CardTitle>
-                    {skill.files.length > 1 && (
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        {skill.files.length} files
+                    <div className="flex gap-1 shrink-0">
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${skill.source === 'cursor' ? 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400' : 'border-violet-300 text-violet-600 dark:border-violet-700 dark:text-violet-400'}`}
+                      >
+                        {skill.source === 'cursor' ? 'ECC' : 'Emil'}
                       </Badge>
-                    )}
+                    </div>
                   </div>
                   <CardDescription className="text-sm leading-relaxed line-clamp-3">
                     {skill.description}
