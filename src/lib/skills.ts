@@ -86,6 +86,7 @@ const SKILLS_DIRS = [
   { path: ".cursor/skills", source: "cursor" },
   { path: ".superpowers/skills", source: "superpowers" },
   { path: ".marketing/skills", source: "marketing" },
+  { path: ".vercel-skills/skills", source: "vercel" },
 ];
 
 function getSkillsFromDir(dirPath: string, source: string): Skill[] {

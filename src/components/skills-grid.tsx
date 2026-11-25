@@ -39,6 +39,11 @@ const sourceColors = {
     icon: "from-emerald-500 to-teal-500",
     label: "Marketing",
   },
+  vercel: {
+    badge: "border-zinc-400/50 bg-zinc-50 text-zinc-700 dark:border-zinc-500/30 dark:bg-zinc-800/50 dark:text-zinc-300",
+    icon: "from-zinc-800 to-zinc-600 dark:from-zinc-100 dark:to-zinc-300",
+    label: "Vercel",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -89,6 +94,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
   const emilCount = skills.filter((s) => s.source === "agents").length;
   const superpowersCount = skills.filter((s) => s.source === "superpowers").length;
   const marketingCount = skills.filter((s) => s.source === "marketing").length;
+  const vercelCount = skills.filter((s) => s.source === "vercel").length;
 
   return (
     <>
@@ -167,6 +173,16 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
             }`}
           >
             Marketing ({marketingCount})
+          </button>
+          <button
+            onClick={() => setSourceFilter("vercel")}
+            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
+              sourceFilter === "vercel"
+                ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900"
+                : "text-zinc-600 dark:text-zinc-400"
+            }`}
+          >
+            Vercel ({vercelCount})
           </button>
         </div>
 
