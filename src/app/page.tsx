@@ -1,101 +1,48 @@
-import Link from "next/link";
 import { getAllSkills } from "@/lib/skills";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { SkillsGrid } from "@/components/skills-grid";
 
 export default function Home() {
   const skills = getAllSkills();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-900">
-      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-              <svg
-                className="w-5 h-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                Skills Browser
-              </h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Browse and explore AI agent skills
-              </p>
+    <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-white to-zinc-50/50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950/50">
+      <header className="border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-6 py-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
+                <svg
+                  className="w-5 h-5 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                  Skills Browser
+                </h1>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  {skills.length} skills installed
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-12">
-        <div className="mb-8">
-          <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl">
-            Skills teach AI agents specialized workflows and domain knowledge.
-            Each skill encodes expertise into actionable guidance that agents
-            can follow to produce better results.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 mb-6">
-          <Badge variant="secondary" className="text-sm">
-            {skills.length} skills installed
-          </Badge>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {skills.map((skill) => (
-            <Link key={skill.slug} href={`/skill/${skill.slug}`}>
-              <Card className="h-full transition-all duration-200 ease-out hover:shadow-lg hover:shadow-zinc-200/50 dark:hover:shadow-zinc-900/50 hover:-translate-y-0.5 hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer group">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
-                      {skill.name}
-                    </CardTitle>
-                    <div className="flex gap-1 shrink-0">
-                      <Badge 
-                        variant="outline" 
-                        className={`text-xs ${skill.source === 'cursor' ? 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400' : 'border-violet-300 text-violet-600 dark:border-violet-700 dark:text-violet-400'}`}
-                      >
-                        {skill.source === 'cursor' ? 'ECC' : 'Emil'}
-                      </Badge>
-                    </div>
-                  </div>
-                  <CardDescription className="text-sm leading-relaxed line-clamp-3">
-                    {skill.description}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
-
-        {skills.length === 0 && (
-          <div className="text-center py-16 text-zinc-500 dark:text-zinc-400">
-            <p className="text-lg mb-2">No skills found</p>
-            <p className="text-sm">
-              Add skills to <code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 font-mono text-sm">.agents/skills/</code>
-            </p>
-          </div>
-        )}
+      <main className="max-w-6xl mx-auto px-6 py-8">
+        <SkillsGrid skills={skills.map(s => ({ slug: s.slug, name: s.name, description: s.description, source: s.source }))} />
       </main>
 
-      <footer className="border-t border-zinc-200 dark:border-zinc-800 py-6 mt-12">
+      <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 py-6 mt-8">
         <div className="max-w-6xl mx-auto px-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
           Skills Browser
         </div>
