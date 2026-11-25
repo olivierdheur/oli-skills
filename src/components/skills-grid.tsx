@@ -44,6 +44,11 @@ const sourceColors = {
     icon: "from-zinc-800 to-zinc-600 dark:from-zinc-100 dark:to-zinc-300",
     label: "Vercel",
   },
+  seo: {
+    badge: "border-rose-400/50 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/50 dark:text-rose-300",
+    icon: "from-rose-500 to-pink-500",
+    label: "Claude SEO",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -95,6 +100,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
   const superpowersCount = skills.filter((s) => s.source === "superpowers").length;
   const marketingCount = skills.filter((s) => s.source === "marketing").length;
   const vercelCount = skills.filter((s) => s.source === "vercel").length;
+  const seoCount = skills.filter((s) => s.source === "seo").length;
 
   return (
     <>
@@ -183,6 +189,16 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
             }`}
           >
             Vercel ({vercelCount})
+          </button>
+          <button
+            onClick={() => setSourceFilter("seo")}
+            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
+              sourceFilter === "seo"
+                ? "bg-rose-600 text-white"
+                : "text-zinc-600 dark:text-zinc-400"
+            }`}
+          >
+            Claude SEO ({seoCount})
           </button>
         </div>
 
