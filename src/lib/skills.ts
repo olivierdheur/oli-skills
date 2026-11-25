@@ -65,6 +65,10 @@ const categoryPatterns: { category: string; patterns: RegExp[] }[] = [
     category: "Marketing",
     patterns: [/marketing/i, /seo/i, /cro/i, /copywriting/i, /copy/i, /ads/i, /email/i, /social/i, /landing/i, /conversion/i, /analytics/i, /content/i, /launch/i, /pricing/i, /referral/i, /churn/i, /onboard/i, /popup/i, /paywall/i, /signup/i, /ab-test/i, /competitor/i, /link-build/i, /schema/i, /programmatic/i, /site-arch/i, /aso/i, /cold-email/i, /lead/i, /sales/i, /revops/i, /influencer/i, /community/i, /event/i, /video/i, /image/i, /sms/i, /offer/i, /directory/i, /prospect/i, /attribution/i, /public-relation/i, /co-market/i, /free-tool/i],
   },
+  {
+    category: "Agency",
+    patterns: [/agency/i, /engineer/i, /developer/i, /designer/i, /architect/i, /analyst/i, /specialist/i, /strategist/i, /manager/i, /coordinator/i, /coach/i, /consultant/i, /researcher/i, /producer/i, /writer/i, /editor/i, /reviewer/i, /optimizer/i, /builder/i, /commander/i, /gis/i, /healthcare/i, /finance/i, /project-management/i, /spatial/i, /game-dev/i, /academic/i, /support/i],
+  },
 ];
 
 function detectCategory(name: string, description: string): string {
@@ -88,6 +92,7 @@ const SKILLS_DIRS = [
   { path: ".marketing/skills", source: "marketing" },
   { path: ".vercel-skills/skills", source: "vercel" },
   { path: ".claude-seo/skills", source: "seo" },
+  { path: ".agency/skills", source: "agency" },
 ];
 
 function getSkillsFromDir(dirPath: string, source: string): Skill[] {

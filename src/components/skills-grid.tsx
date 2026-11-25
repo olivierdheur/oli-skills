@@ -49,6 +49,11 @@ const sourceColors = {
     icon: "from-rose-500 to-pink-500",
     label: "Claude SEO",
   },
+  agency: {
+    badge: "border-cyan-400/50 bg-cyan-50 text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-950/50 dark:text-cyan-300",
+    icon: "from-cyan-500 to-sky-500",
+    label: "Agency",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -65,6 +70,7 @@ const categoryIcons: Record<string, string> = {
   "Languages": "📝",
   "Workflow": "⚡",
   "Marketing": "📈",
+  "Agency": "🎭",
   "Other": "📦",
 };
 
@@ -101,6 +107,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
   const marketingCount = skills.filter((s) => s.source === "marketing").length;
   const vercelCount = skills.filter((s) => s.source === "vercel").length;
   const seoCount = skills.filter((s) => s.source === "seo").length;
+  const agencyCount = skills.filter((s) => s.source === "agency").length;
 
   return (
     <>
@@ -199,6 +206,16 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
             }`}
           >
             Claude SEO ({seoCount})
+          </button>
+          <button
+            onClick={() => setSourceFilter("agency")}
+            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
+              sourceFilter === "agency"
+                ? "bg-cyan-600 text-white"
+                : "text-zinc-600 dark:text-zinc-400"
+            }`}
+          >
+            Agency ({agencyCount})
           </button>
         </div>
 
