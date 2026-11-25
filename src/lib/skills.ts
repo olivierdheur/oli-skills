@@ -43,11 +43,11 @@ const categoryPatterns: { category: string; patterns: RegExp[] }[] = [
   },
   {
     category: "AI/Agents",
-    patterns: [/agent/i, /\bai\b/i, /llm/i, /continuous-learning/i, /eval/i, /council/i, /model/i],
+    patterns: [/agent/i, /\bai\b/i, /llm/i, /continuous-learning/i, /eval/i, /council/i, /model/i, /subagent/i, /dispatch/i],
   },
   {
     category: "DevOps",
-    patterns: [/deploy/i, /ci\b/i, /cd\b/i, /docker/i, /kubernetes/i, /infrastructure/i, /monitoring/i],
+    patterns: [/deploy/i, /ci\b/i, /cd\b/i, /docker/i, /kubernetes/i, /infrastructure/i, /monitoring/i, /worktree/i, /git/i],
   },
   {
     category: "Architecture",
@@ -56,6 +56,10 @@ const categoryPatterns: { category: string; patterns: RegExp[] }[] = [
   {
     category: "Languages",
     patterns: [/swift/i, /kotlin/i, /python/i, /typescript/i, /golang/i, /rust/i, /cpp/i, /csharp/i, /java\b/i, /dart/i, /flutter/i, /dotnet/i, /ruby/i, /rails/i, /perl/i, /php/i, /bun/i],
+  },
+  {
+    category: "Workflow",
+    patterns: [/brainstorm/i, /plan/i, /execut/i, /finish/i, /review/i, /debug/i, /diagnos/i, /superpowers/i],
   },
 ];
 
@@ -76,6 +80,7 @@ function detectCategory(name: string, description: string): string {
 const SKILLS_DIRS = [
   { path: ".agents/skills", source: "agents" },
   { path: ".cursor/skills", source: "cursor" },
+  { path: ".superpowers/skills", source: "superpowers" },
 ];
 
 function getSkillsFromDir(dirPath: string, source: string): Skill[] {

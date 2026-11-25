@@ -29,6 +29,11 @@ const sourceColors = {
     icon: "from-violet-500 to-fuchsia-500",
     label: "Emil",
   },
+  superpowers: {
+    badge: "border-amber-400/50 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/50 dark:text-amber-300",
+    icon: "from-amber-500 to-orange-500",
+    label: "Superpowers",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -43,6 +48,7 @@ const categoryIcons: Record<string, string> = {
   "DevOps": "🚀",
   "Architecture": "🏗️",
   "Languages": "📝",
+  "Workflow": "⚡",
   "Other": "📦",
 };
 
@@ -75,6 +81,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
 
   const eccCount = skills.filter((s) => s.source === "cursor").length;
   const emilCount = skills.filter((s) => s.source === "agents").length;
+  const superpowersCount = skills.filter((s) => s.source === "superpowers").length;
 
   return (
     <>
@@ -133,6 +140,16 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
             }`}
           >
             Emil ({emilCount})
+          </button>
+          <button
+            onClick={() => setSourceFilter("superpowers")}
+            className={`nav-button px-3 py-1.5 rounded-lg text-sm font-medium ${
+              sourceFilter === "superpowers"
+                ? "bg-amber-600 text-white"
+                : "text-zinc-600 dark:text-zinc-400"
+            }`}
+          >
+            Superpowers ({superpowersCount})
           </button>
         </div>
 
