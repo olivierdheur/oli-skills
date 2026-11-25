@@ -1,5 +1,6 @@
 import { getAllSkills } from "@/lib/skills";
 import { SkillsGrid } from "@/components/skills-grid";
+import { UsageGuide } from "@/components/usage-guide";
 
 export default function Home() {
   const skills = getAllSkills();
@@ -39,6 +40,7 @@ export default function Home() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
+        <UsageGuide />
         <SkillsGrid skills={skills.map(s => ({ slug: s.slug, name: s.name, description: s.description, source: s.source, category: s.category }))} />
       </main>
 
