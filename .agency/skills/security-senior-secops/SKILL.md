@@ -42,10 +42,10 @@ postgresql://user:password@host
 mysql://user:password@host
 redis://:password@host
 
-# Private key material
------BEGIN RSA PRIVATE KEY-----
------BEGIN EC PRIVATE KEY-----
------BEGIN PGP PRIVATE KEY-----
+# Private key material (patterns to detect)
+[BEGIN RSA PRIVATE KEY]
+[BEGIN EC PRIVATE KEY]
+[BEGIN PGP PRIVATE KEY]
 
 # Cloud provider credentials
 AKIA[0-9A-Z]{16}          # AWS Access Key ID pattern
