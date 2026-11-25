@@ -126,7 +126,7 @@ export default async function SkillPage({
 
         <footer className="border-t border-zinc-200 dark:border-zinc-800 py-6 mt-12">
           <div className="max-w-4xl mx-auto px-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Skills Browser
+            Oli's Skills Browser
           </div>
         </footer>
       </div>
@@ -235,7 +235,7 @@ export default async function SkillPage({
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800 py-6 mt-12">
         <div className="max-w-4xl mx-auto px-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          Skills Browser
+          Oli's Skills Browser
         </div>
       </footer>
     </div>

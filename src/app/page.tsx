@@ -27,10 +27,10 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-                  Skills Browser
-                </h1>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  {skills.length} skills installed
+                Oli's Skills Browser
+              </h1>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                {skills.length} skills installed
                 </p>
               </div>
             </div>
@@ -44,7 +44,7 @@ export default function Home() {
 
       <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 py-6 mt-8">
         <div className="max-w-6xl mx-auto px-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          Skills Browser
+          Oli's Skills Browser
         </div>
       </footer>
     </div>

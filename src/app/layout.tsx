@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Skills Browser",
-  description: "Browse design and animation skills by Emil Kowalski",
+  title: "Oli's Skills Browser",
+  description: "Browse and explore AI agent skills",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
