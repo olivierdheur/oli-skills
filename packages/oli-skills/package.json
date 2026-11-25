@@ -1,0 +1,32 @@
+{
+  "name": "oli-skills",
+  "version": "1.0.0",
+  "description": "500+ AI agent skills for Cursor - install, search, and manage skills in any project",
+  "main": "dist/index.js",
+  "bin": {
+    "oli-skills": "./dist/cli.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "cursor",
+    "ai",
+    "skills",
+    "agents",
+    "cli",
+    "developer-tools"
+  ],
+  "author": "Oli",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oli/oli-skills"
+  }
+}
