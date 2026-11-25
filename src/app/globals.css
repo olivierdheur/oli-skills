@@ -52,6 +52,9 @@
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  --toast-bg: #ffffff;
+  --toast-border: #e4e4e7;
+  --toast-text: #18181b;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -87,6 +90,9 @@
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
+  --toast-bg: #27272a;
+  --toast-border: #3f3f46;
+  --toast-text: #fafafa;
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   Card,
   CardHeader,
@@ -91,41 +93,84 @@ const sourceToPath: Record<string, string> = {
   agency: ".agency/skills",
 };
 
-function CopyButton({ path, name }: { path: string; name: string }) {
-  const [copied, setCopied] = useState(false);
+const suggestedSearches = [
+  { label: "Animation", query: "animation" },
+  { label: "React", query: "react" },
+  { label: "SEO", query: "seo" },
+  { label: "Marketing", query: "marketing" },
+  { label: "Testing", query: "test" },
+  { label: "Security", query: "security" },
+];
 
+function CopyButton({ path, name }: { path: string; name: string }) {
   const handleCopy = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const prompt = `Read ${path}/${name}/SKILL.md`;
     await navigator.clipboard.writeText(prompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    toast.success("Copied to clipboard", {
+      description: prompt,
+      duration: 2000,
+    });
   }, [path, name]);
 
   return (
     <button
       onClick={handleCopy}
-      className={`copy-button absolute top-3 right-3 p-1.5 rounded-lg bg-zinc-100/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200/50 dark:border-zinc-700/50 ${copied ? 'copy-success' : ''}`}
+      className="copy-button absolute top-3 right-3 p-1.5 rounded-lg bg-zinc-100/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200/50 dark:border-zinc-700/50"
       title="Copy Cursor prompt"
     >
-      {copied ? (
-        <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-      ) : (
-        <svg className="w-4 h-4 text-zinc-500 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-        </svg>
-      )}
+      <svg className="w-4 h-4 text-zinc-500 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+      </svg>
     </button>
   );
 }
 
-export function SkillsGrid({ skills }: { skills: Skill[] }) {
-  const [search, setSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+interface SkillsGridProps {
+  skills: Skill[];
+  onFilteredCountChange?: (count: number) => void;
+}
+
+export function SkillsGrid({ skills, onFilteredCountChange }: SkillsGridProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  const [search, setSearch] = useState(searchParams.get("q") || "");
+  const [sourceFilter, setSourceFilter] = useState<string | null>(searchParams.get("source"));
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(searchParams.get("category"));
+
+  const updateURL = useCallback((newSearch: string, newSource: string | null, newCategory: string | null) => {
+    const params = new URLSearchParams();
+    if (newSearch) params.set("q", newSearch);
+    if (newSource) params.set("source", newSource);
+    if (newCategory) params.set("category", newCategory);
+    const queryString = params.toString();
+    router.push(queryString ? `?${queryString}` : "/", { scroll: false });
+  }, [router]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === "Escape") {
+        if (document.activeElement === searchInputRef.current) {
+          if (search) {
+            setSearch("");
+            updateURL("", sourceFilter, categoryFilter);
+          } else {
+            searchInputRef.current?.blur();
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [search, sourceFilter, categoryFilter, updateURL]);
 
   const categories = useMemo(() => {
     const categoryCount = new Map<string, number>();
@@ -138,7 +183,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
   }, [skills]);
 
   const filteredSkills = useMemo(() => {
-    return skills.filter((skill) => {
+    const results = skills.filter((skill) => {
       const matchesSearch =
         search === "" ||
         skill.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -147,7 +192,12 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
       const matchesCategory = !categoryFilter || skill.category === categoryFilter;
       return matchesSearch && matchesSource && matchesCategory;
     });
+    return results;
   }, [skills, search, sourceFilter, categoryFilter]);
+
+  useEffect(() => {
+    onFilteredCountChange?.(filteredSkills.length);
+  }, [filteredSkills.length, onFilteredCountChange]);
 
   const sourceCounts = useMemo(() => ({
     cursor: skills.filter((s) => s.source === "cursor").length,
@@ -169,6 +219,30 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
     { key: "agency", label: "Agency", count: sourceCounts.agency },
   ];
 
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    updateURL(value, sourceFilter, categoryFilter);
+  };
+
+  const handleSourceChange = (source: string | null) => {
+    setSourceFilter(source);
+    updateURL(search, source, categoryFilter);
+  };
+
+  const handleCategoryChange = (category: string | null) => {
+    setCategoryFilter(category);
+    updateURL(search, sourceFilter, category);
+  };
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setSourceFilter(null);
+    setCategoryFilter(null);
+    updateURL("", null, null);
+  };
+
+  const hasFilters = search || sourceFilter || categoryFilter;
+
   return (
     <>
       <div className="mb-8 space-y-5">
@@ -189,22 +263,28 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
               />
             </svg>
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search 500+ skills..."
+              placeholder="Search skills..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="search-input w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none text-base"
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="search-input w-full pl-12 pr-24 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none text-base"
             />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              {search && (
+                <button
+                  onClick={() => handleSearchChange("")}
+                  className="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs font-mono border border-zinc-200 dark:border-zinc-700">
+                <span className="text-[10px]">⌘</span>K
+              </kbd>
+            </div>
           </div>
         </div>
 
@@ -215,7 +295,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setSourceFilter(null)}
+              onClick={() => handleSourceChange(null)}
               className={`filter-pill px-4 py-2 rounded-xl text-sm font-medium ${
                 !sourceFilter
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-lg"
@@ -231,7 +311,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
               return (
                 <button
                   key={key}
-                  onClick={() => setSourceFilter(isActive ? null : key)}
+                  onClick={() => handleSourceChange(isActive ? null : key)}
                   className={`filter-pill px-4 py-2 rounded-xl text-sm font-medium ${
                     isActive
                       ? colors.active
@@ -253,7 +333,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setCategoryFilter(null)}
+              onClick={() => handleCategoryChange(null)}
               className={`filter-pill px-3 py-1.5 rounded-lg text-xs font-medium ${
                 !categoryFilter
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
@@ -265,7 +345,7 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
             {categories.map(({ name, count }) => (
               <button
                 key={name}
-                onClick={() => setCategoryFilter(categoryFilter === name ? null : name)}
+                onClick={() => handleCategoryChange(categoryFilter === name ? null : name)}
                 className={`filter-pill px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ${
                   categoryFilter === name
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
@@ -280,17 +360,13 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
           </div>
         </div>
 
-        {(search || sourceFilter || categoryFilter) && (
+        {hasFilters && (
           <div className="flex items-center justify-between pt-2">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Showing <span className="font-semibold text-zinc-900 dark:text-zinc-100">{filteredSkills.length}</span> of {skills.length} skills
             </p>
             <button
-              onClick={() => {
-                setSearch("");
-                setSourceFilter(null);
-                setCategoryFilter(null);
-              }}
+              onClick={clearAllFilters}
               className="text-sm text-violet-600 dark:text-violet-400 font-medium hover:underline"
             >
               Clear all filters
@@ -381,14 +457,33 @@ export function SkillsGrid({ skills }: { skills: Skill[] }) {
             No skills found
           </p>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-            Try a different search term or filter combination
+            {search 
+              ? `No results for "${search}"${sourceFilter ? ` in ${sourceColors[sourceFilter as keyof typeof sourceColors]?.label || sourceFilter}` : ''}` 
+              : "Try a different filter combination"
+            }
           </p>
+          
+          <div className="mb-6">
+            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 mb-3 uppercase tracking-wider">Try searching for</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {suggestedSearches.map(({ label, query }) => (
+                <button
+                  key={query}
+                  onClick={() => {
+                    handleSearchChange(query);
+                    handleSourceChange(null);
+                    handleCategoryChange(null);
+                  }}
+                  className="filter-pill px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
-            onClick={() => {
-              setSearch("");
-              setSourceFilter(null);
-              setCategoryFilter(null);
-            }}
+            onClick={clearAllFilters}
             className="filter-pill px-5 py-2.5 rounded-xl text-sm font-medium bg-violet-600 text-white shadow-lg shadow-violet-500/25 hover:bg-violet-700 transition-colors"
           >
             Clear all filters
