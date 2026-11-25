@@ -36,7 +36,7 @@ export default function Home() {
                 Skills Browser
               </h1>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Design and animation skills by Emil Kowalski
+                Browse and explore AI agent skills
               </p>
             </div>
           </div>
@@ -46,9 +46,9 @@ export default function Home() {
       <main className="max-w-6xl mx-auto px-6 py-12">
         <div className="mb-8">
           <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl">
-            These skills teach AI agents how to build better user interfaces
-            with proper animations, design decisions, and engineering taste.
-            Each skill encodes years of experience into actionable guidance.
+            Skills teach AI agents specialized workflows and domain knowledge.
+            Each skill encodes expertise into actionable guidance that agents
+            can follow to produce better results.
           </p>
         </div>
 
@@ -94,15 +94,7 @@ export default function Home() {
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800 py-6 mt-12">
         <div className="max-w-6xl mx-auto px-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          Skills from{" "}
-          <a
-            href="https://github.com/emilkowalski/skills"
-            className="text-violet-600 dark:text-violet-400 hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            emilkowalski/skills
-          </a>
+          Skills Browser
         </div>
       </footer>
     </div>
