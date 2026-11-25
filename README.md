@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Oli's Skills Browser
 
-## Getting Started
+A Next.js web app to browse 512+ AI agent skills, plus a CLI for efficient skill discovery and loading.
 
-First, run the development server:
+**Live**: https://skills-browser-odheur-gmailcoms-projects.vercel.app
+
+## Skill Collections
+
+| Collection | Skills | Focus |
+|------------|--------|-------|
+| **ECC** | 131 | Developer workflows, security, architecture |
+| **Emil** | 15 | UI/UX, animation, design engineering |
+| **Superpowers** | 15 | Planning, TDD, code review, debugging |
+| **Marketing** | 52 | CRO, SEO, copywriting, analytics |
+| **Vercel** | 8 | React, Next.js, deployment |
+| **Claude SEO** | 29 | Technical SEO, AI search, schema |
+| **Agency** | 262 | Full agency team across all domains |
+
+## Using Skills Efficiently
+
+### CLI Commands
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Search skills
+./scripts/skill search animation
+
+# Show a skill
+./scripts/skill show animate
+
+# List by source
+./scripts/skill list marketing
+
+# See skill packs
+./scripts/skill packs
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### In Cursor/Claude
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Don't load all skills** — only load what you need
+2. Search: `./scripts/skill search <query>`
+3. Read the specific SKILL.md file
+4. Apply and move on
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Quick Reference
 
-## Learn More
+See `SKILLS-INDEX.md` for a compact list of all 512+ skills with descriptions.
 
-To learn more about Next.js, take a look at the following resources:
+## Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Open http://localhost:3000
 
-## Deploy on Vercel
+## Sources
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [emilkowalski/skills](https://github.com/emilkowalski/skills) - Emil Kowalski
+- [affaan-m/ECC](https://github.com/affaan-m/ECC) - ECC Developer Skills
+- [obra/superpowers](https://github.com/obra/superpowers) - Superpowers by Jesse Vincent
+- [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills) - Corey Haines
+- [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) - Vercel
+- [AgriciDaniel/claude-seo](https://github.com/AgriciDaniel/claude-seo) - Agrici Daniel
+- [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents) - The Agency

@@ -1,0 +1,136 @@
+#!/bin/bash
+# Skill loader - quickly find and display skills
+
+SKILL_DIRS=(
+  ".agents/skills:Emil"
+  ".cursor/skills:ECC"
+  ".superpowers/skills:Superpowers"
+  ".marketing/skills:Marketing"
+  ".vercel-skills/skills:Vercel"
+  ".claude-seo/skills:Claude SEO"
+  ".agency/skills:Agency"
+)
+
+usage() {
+  echo "Usage: skill <command> [args]"
+  echo ""
+  echo "Commands:"
+  echo "  search <query>  Search skills by name or description"
+  echo "  show <name>     Display a skill's content"
+  echo "  list [source]   List all skills or by source"
+  echo "  packs           Show available skill packs"
+  echo ""
+  echo "Examples:"
+  echo "  skill search animation"
+  echo "  skill show animate"
+  echo "  skill list marketing"
+}
+
+search_skills() {
+  local query="$1"
+  echo "🔍 Searching for: $query"
+  echo ""
+  
+  for entry in "${SKILL_DIRS[@]}"; do
+    dir="${entry%%:*}"
+    source="${entry##*:}"
+    
+    if [ -d "$dir" ]; then
+      for skill_dir in "$dir"/*/; do
+        if [ -f "${skill_dir}SKILL.md" ]; then
+          skill_name=$(basename "$skill_dir")
+          if grep -qi "$query" "${skill_dir}SKILL.md" 2>/dev/null; then
+            # Extract description from frontmatter
+            desc=$(grep -A1 "^description:" "${skill_dir}SKILL.md" 2>/dev/null | tail -1 | head -c 60)
+            echo "[$source] $skill_name"
+            echo "  → ${skill_dir}SKILL.md"
+          fi
+        fi
+      done
+    fi
+  done
+}
+
+show_skill() {
+  local name="$1"
+  
+  for entry in "${SKILL_DIRS[@]}"; do
+    dir="${entry%%:*}"
+    
+    if [ -f "$dir/$name/SKILL.md" ]; then
+      echo "📖 Found: $dir/$name/SKILL.md"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      cat "$dir/$name/SKILL.md"
+      return 0
+    fi
+  done
+  
+  echo "❌ Skill '$name' not found. Try: skill search $name"
+  return 1
+}
+
+list_skills() {
+  local filter="$1"
+  
+  for entry in "${SKILL_DIRS[@]}"; do
+    dir="${entry%%:*}"
+    source="${entry##*:}"
+    
+    if [ -n "$filter" ] && [[ ! "${source,,}" == *"${filter,,}"* ]]; then
+      continue
+    fi
+    
+    if [ -d "$dir" ]; then
+      count=$(find "$dir" -name "SKILL.md" 2>/dev/null | wc -l)
+      echo ""
+      echo "━━━ $source ($count skills) ━━━"
+      for skill_dir in "$dir"/*/; do
+        if [ -f "${skill_dir}SKILL.md" ]; then
+          echo "  $(basename "$skill_dir")"
+        fi
+      done
+    fi
+  done
+}
+
+show_packs() {
+  echo "📦 Available Skill Packs"
+  echo ""
+  echo "Frontend Development:"
+  echo "  .agents/skills/animate, .vercel-skills/skills/react-best-practices"
+  echo "  .vercel-skills/skills/react-view-transitions, .vercel-skills/skills/composition-patterns"
+  echo ""
+  echo "Marketing & Growth:"
+  echo "  .marketing/skills/cro, .marketing/skills/copywriting, .marketing/skills/seo-audit"
+  echo "  .marketing/skills/analytics, .marketing/skills/ab-testing"
+  echo ""
+  echo "SEO:"
+  echo "  .claude-seo/skills/seo-audit, .claude-seo/skills/seo-technical"
+  echo "  .claude-seo/skills/seo-schema, .claude-seo/skills/seo-geo"
+  echo ""
+  echo "Development Workflow:"
+  echo "  .superpowers/skills/brainstorming, .superpowers/skills/writing-plans"
+  echo "  .superpowers/skills/test-driven-development, .superpowers/skills/requesting-code-review"
+  echo ""
+  echo "Design:"
+  echo "  .agents/skills/emil-design-eng, .agents/skills/apple-design"
+  echo "  .agents/skills/mobile-native, .agents/skills/break-ui"
+}
+
+case "$1" in
+  search)
+    search_skills "$2"
+    ;;
+  show)
+    show_skill "$2"
+    ;;
+  list)
+    list_skills "$2"
+    ;;
+  packs)
+    show_packs
+    ;;
+  *)
+    usage
+    ;;
+esac

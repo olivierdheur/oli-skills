@@ -1,0 +1,62 @@
+---
+description: Skill discovery and loading system for 512+ agent skills
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Skills System
+
+You have access to 512+ specialized skills organized in 7 collections. **Don't load skills by default** — only load what's needed for the current task.
+
+## Quick Reference
+
+| Collection | Count | Focus |
+|------------|-------|-------|
+| ECC | 131 | Developer workflows, security, architecture |
+| Emil | 15 | UI/UX, animation, design engineering |
+| Superpowers | 15 | Planning, TDD, code review, debugging |
+| Marketing | 52 | CRO, SEO, copywriting, analytics, ads |
+| Vercel | 8 | React, Next.js, deployment, performance |
+| Claude SEO | 29 | Technical SEO, AI search, schema, local SEO |
+| Agency | 262 | Full agency team: engineering, design, sales, GIS, healthcare |
+
+## How to Use Skills
+
+1. **Browse**: Visit the Skills Browser at https://skills-browser-odheur-gmailcoms-projects.vercel.app
+2. **Search**: Use `/skill-search <query>` to find relevant skills
+3. **Load**: Read the specific skill file when needed
+
+## Skill Locations
+
+```
+.agents/skills/       → Emil's design/animation skills
+.cursor/skills/       → ECC developer skills  
+.superpowers/skills/  → Superpowers workflow skills
+.marketing/skills/    → Marketing skills
+.vercel-skills/skills/→ Vercel React/Next.js skills
+.claude-seo/skills/   → Claude SEO skills
+.agency/skills/       → Agency agent personalities
+```
+
+## Loading a Skill
+
+When a task matches a skill domain, read the SKILL.md file:
+
+```
+# Example: Need CRO help
+Read: .marketing/skills/cro/SKILL.md
+
+# Example: Need animation help  
+Read: .agents/skills/animate/SKILL.md
+
+# Example: Need code review
+Read: .superpowers/skills/requesting-code-review/SKILL.md
+```
+
+## Token-Efficient Workflow
+
+1. Start with NO skills loaded
+2. Identify task domain (frontend? SEO? marketing?)
+3. Load 1-3 relevant skills max
+4. Complete task
+5. Don't carry skills to next task unless related
