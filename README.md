@@ -2,7 +2,7 @@
 
 500+ AI agent skills for Cursor — browse online or install anywhere via npm.
 
-**Web**: https://skills-browser-odheur-gmailcoms-projects.vercel.app  
+**Web**: https://oli-skills.vercel.app  
 **npm**: https://www.npmjs.com/package/oli-skills
 
 ## Quick Install
