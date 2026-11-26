@@ -20,7 +20,7 @@ interface Skill {
   category: string;
 }
 
-const sourceColors = {
+const sourceColors: Record<string, { badge: string; icon: string; label: string; active: string }> = {
   cursor: {
     badge: "border-blue-400/50 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/50 dark:text-blue-300",
     icon: "from-blue-500 to-cyan-500",
@@ -63,24 +63,86 @@ const sourceColors = {
     label: "Agency",
     active: "bg-gradient-to-r from-cyan-500 to-sky-500 text-white shadow-lg shadow-cyan-500/25",
   },
+  mattpocock: {
+    badge: "border-indigo-400/50 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-950/50 dark:text-indigo-300",
+    icon: "from-indigo-500 to-purple-500",
+    label: "Matt Pocock",
+    active: "bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/25",
+  },
+  jmanico: {
+    badge: "border-red-400/50 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-950/50 dark:text-red-300",
+    icon: "from-red-500 to-orange-500",
+    label: "Jim Manico",
+    active: "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg shadow-red-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
-  "Animation": "🎬",
-  "UI/Design": "🎨",
+  // Parent categories
   "Security": "🔒",
-  "Writing": "✍️",
-  "Testing": "🧪",
-  "Backend": "⚙️",
+  "AI": "🤖",
+  "Design": "🎨",
   "Frontend": "🖥️",
-  "AI/Agents": "🤖",
-  "DevOps": "🚀",
-  "Architecture": "🏗️",
+  "Backend": "⚙️",
   "Languages": "📝",
-  "Workflow": "⚡",
+  "Architecture": "🏗️",
+  "DevOps": "🚀",
+  "Testing": "🧪",
   "Marketing": "📈",
-  "Agency": "🎭",
+  "Writing": "✍️",
+  "Workflow": "⚡",
+  "Data": "📊",
+  "Roles": "🎭",
   "Other": "📦",
+  // Subcategories
+  "Threat Modeling": "🎯",
+  "Logging & Audit": "📋",
+  "Dependencies": "📦",
+  "Auth": "🔐",
+  "General": "📌",
+  "Agents": "🤖",
+  "LLM Patterns": "💬",
+  "Coding Dictionary": "📖",
+  "Tools": "🔧",
+  "Animation": "🎬",
+  "Components": "🧩",
+  "UI Patterns": "🎨",
+  "Prototyping": "✏️",
+  "React": "⚛️",
+  "Vue": "💚",
+  "Other Frameworks": "🔷",
+  "API": "🔌",
+  "Database": "🗄️",
+  "Frameworks": "📚",
+  "TypeScript": "🔷",
+  "Python": "🐍",
+  "Rust": "🦀",
+  "Swift": "🍎",
+  "Go": "🐹",
+  "Patterns": "🧬",
+  "Codebase": "📂",
+  "CI/CD": "🔄",
+  "Containers": "🐳",
+  "Infrastructure": "☁️",
+  "Git": "🌿",
+  "Unit": "🔬",
+  "E2E": "🎭",
+  "SEO": "🔍",
+  "Ads & PPC": "💰",
+  "Email": "📧",
+  "Social": "💬",
+  "Conversion": "📈",
+  "Content": "📝",
+  "Analytics": "📊",
+  "Technical": "📄",
+  "Business": "💼",
+  "Planning": "📋",
+  "Execution": "⚡",
+  "Review": "🔎",
+  "Analysis": "📈",
+  "ML": "🧠",
+  "Engineering": "👨‍💻",
+  "Specialist": "🎯",
 };
 
 const sourceToPath: Record<string, string> = {
@@ -91,6 +153,8 @@ const sourceToPath: Record<string, string> = {
   vercel: ".vercel-skills/skills",
   seo: ".claude-seo/skills",
   agency: ".agency/skills",
+  mattpocock: ".mattpocock/skills",
+  jmanico: ".jmanico/skills",
 };
 
 const suggestedSearches = [
@@ -172,15 +236,49 @@ export function SkillsGrid({ skills, onFilteredCountChange }: SkillsGridProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [search, sourceFilter, categoryFilter, updateURL]);
 
-  const categories = useMemo(() => {
-    const categoryCount = new Map<string, number>();
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+
+  // Parse hierarchical categories
+  const { parentCategories, categoryTree } = useMemo(() => {
+    const tree = new Map<string, { count: number; subcategories: Map<string, number> }>();
+    
     for (const skill of skills) {
-      categoryCount.set(skill.category, (categoryCount.get(skill.category) || 0) + 1);
+      const parts = skill.category.split(" > ");
+      const parent = parts[0];
+      const sub = parts[1] || "General";
+      
+      if (!tree.has(parent)) {
+        tree.set(parent, { count: 0, subcategories: new Map() });
+      }
+      const node = tree.get(parent)!;
+      node.count++;
+      node.subcategories.set(sub, (node.subcategories.get(sub) || 0) + 1);
     }
-    return Array.from(categoryCount.entries())
-      .map(([name, count]) => ({ name, count }))
+    
+    const parents = Array.from(tree.entries())
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        subcategories: Array.from(data.subcategories.entries())
+          .map(([subName, subCount]) => ({ name: subName, fullName: `${name} > ${subName}`, count: subCount }))
+          .sort((a, b) => b.count - a.count)
+      }))
       .sort((a, b) => b.count - a.count);
+    
+    return { parentCategories: parents, categoryTree: tree };
   }, [skills]);
+
+  const toggleParentExpand = (parent: string) => {
+    setExpandedParents(prev => {
+      const next = new Set(prev);
+      if (next.has(parent)) {
+        next.delete(parent);
+      } else {
+        next.add(parent);
+      }
+      return next;
+    });
+  };
 
   const filteredSkills = useMemo(() => {
     const results = skills.filter((skill) => {
@@ -189,7 +287,19 @@ export function SkillsGrid({ skills, onFilteredCountChange }: SkillsGridProps) {
         skill.name.toLowerCase().includes(search.toLowerCase()) ||
         skill.description.toLowerCase().includes(search.toLowerCase());
       const matchesSource = !sourceFilter || skill.source === sourceFilter;
-      const matchesCategory = !categoryFilter || skill.category === categoryFilter;
+      
+      // Category filter: match exact category OR parent category
+      let matchesCategory = !categoryFilter;
+      if (categoryFilter) {
+        if (categoryFilter.includes(" > ")) {
+          // Exact subcategory match
+          matchesCategory = skill.category === categoryFilter;
+        } else {
+          // Parent category match
+          matchesCategory = skill.category.startsWith(categoryFilter + " > ") || skill.category === categoryFilter;
+        }
+      }
+      
       return matchesSearch && matchesSource && matchesCategory;
     });
     return results;
@@ -199,25 +309,23 @@ export function SkillsGrid({ skills, onFilteredCountChange }: SkillsGridProps) {
     onFilteredCountChange?.(filteredSkills.length);
   }, [filteredSkills.length, onFilteredCountChange]);
 
-  const sourceCounts = useMemo(() => ({
-    cursor: skills.filter((s) => s.source === "cursor").length,
-    agents: skills.filter((s) => s.source === "agents").length,
-    superpowers: skills.filter((s) => s.source === "superpowers").length,
-    marketing: skills.filter((s) => s.source === "marketing").length,
-    vercel: skills.filter((s) => s.source === "vercel").length,
-    seo: skills.filter((s) => s.source === "seo").length,
-    agency: skills.filter((s) => s.source === "agency").length,
-  }), [skills]);
+  const sourceCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const skill of skills) {
+      counts[skill.source] = (counts[skill.source] || 0) + 1;
+    }
+    return counts;
+  }, [skills]);
 
-  const sources = [
-    { key: "cursor", label: "ECC", count: sourceCounts.cursor },
-    { key: "agents", label: "Emil", count: sourceCounts.agents },
-    { key: "superpowers", label: "Superpowers", count: sourceCounts.superpowers },
-    { key: "marketing", label: "Marketing", count: sourceCounts.marketing },
-    { key: "vercel", label: "Vercel", count: sourceCounts.vercel },
-    { key: "seo", label: "Claude SEO", count: sourceCounts.seo },
-    { key: "agency", label: "Agency", count: sourceCounts.agency },
-  ];
+  const sources = useMemo(() => {
+    return Object.entries(sourceCounts)
+      .map(([key, count]) => ({
+        key,
+        label: sourceColors[key]?.label || key,
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [sourceCounts]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -342,21 +450,74 @@ export function SkillsGrid({ skills, onFilteredCountChange }: SkillsGridProps) {
             >
               All
             </button>
-            {categories.map(({ name, count }) => (
-              <button
-                key={name}
-                onClick={() => handleCategoryChange(categoryFilter === name ? null : name)}
-                className={`filter-pill px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ${
-                  categoryFilter === name
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
-                    : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
-                }`}
-              >
-                <span>{categoryIcons[name] || "📦"}</span>
-                <span>{name}</span>
-                <span className="opacity-60">{count}</span>
-              </button>
-            ))}
+            {parentCategories.map(({ name: parentName, count, subcategories }) => {
+              const isParentActive = categoryFilter === parentName;
+              const isSubActive = categoryFilter?.startsWith(parentName + " > ");
+              const isExpanded = expandedParents.has(parentName);
+              const hasMultipleSubs = subcategories.length > 1;
+              
+              return (
+                <div key={parentName} className="relative">
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => handleCategoryChange(isParentActive ? null : parentName)}
+                      className={`filter-pill px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 ${
+                        isParentActive || isSubActive
+                          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
+                          : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
+                      } ${hasMultipleSubs ? "rounded-r-none pr-2" : ""}`}
+                    >
+                      <span>{categoryIcons[parentName] || "📦"}</span>
+                      <span>{parentName}</span>
+                      <span className="opacity-60">{count}</span>
+                    </button>
+                    {hasMultipleSubs && (
+                      <button
+                        onClick={() => toggleParentExpand(parentName)}
+                        className={`filter-pill px-1.5 py-1.5 rounded-lg rounded-l-none text-xs font-medium border-l border-zinc-300/50 dark:border-zinc-600/50 ${
+                          isParentActive || isSubActive
+                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
+                            : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
+                        }`}
+                      >
+                        <svg
+                          className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  
+                  {isExpanded && hasMultipleSubs && (
+                    <div className="absolute top-full left-0 mt-1 z-20 bg-white dark:bg-zinc-900 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-700 p-1.5 min-w-[160px]">
+                      {subcategories.map(({ name: subName, fullName, count: subCount }) => (
+                        <button
+                          key={fullName}
+                          onClick={() => {
+                            handleCategoryChange(categoryFilter === fullName ? null : fullName);
+                            setExpandedParents(new Set());
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 ${
+                            categoryFilter === fullName
+                              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          <span>{categoryIcons[subName] || "📌"}</span>
+                          <span className="flex-1">{subName}</span>
+                          <span className="opacity-60">{subCount}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
