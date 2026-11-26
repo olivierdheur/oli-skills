@@ -81,6 +81,12 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "HeyGen",
     active: "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25",
   },
+  "21st": {
+    badge: "border-sky-400/50 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/50 dark:text-sky-300",
+    icon: "from-sky-500 to-blue-500",
+    label: "21st.dev",
+    active: "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -162,6 +168,7 @@ const sourceToPath: Record<string, string> = {
   mattpocock: ".mattpocock/skills",
   jmanico: ".jmanico/skills",
   heygen: ".heygen/skills",
+  "21st": ".21st/skills",
 };
 
 const suggestedSearches = [
