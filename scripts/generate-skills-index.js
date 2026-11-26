@@ -20,6 +20,7 @@ const SKILLS_DIRS = [
   { path: ".heygen/skills", source: "heygen" },
   { path: ".21st/skills", source: "21st" },
   { path: ".bradautomates/skills", source: "bradautomates" },
+  { path: ".apify/skills", source: "apify" },
 ];
 
 // Hierarchical category structure: "Parent > Subcategory"

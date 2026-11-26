@@ -93,6 +93,12 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "Brad Automates",
     active: "bg-gradient-to-r from-lime-500 to-green-500 text-white shadow-lg shadow-lime-500/25",
   },
+  apify: {
+    badge: "border-teal-400/50 bg-teal-50 text-teal-700 dark:border-teal-500/30 dark:bg-teal-950/50 dark:text-teal-300",
+    icon: "from-teal-500 to-cyan-500",
+    label: "Apify",
+    active: "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -175,6 +181,8 @@ const sourceToPath: Record<string, string> = {
   jmanico: ".jmanico/skills",
   heygen: ".heygen/skills",
   "21st": ".21st/skills",
+  bradautomates: ".bradautomates/skills",
+  apify: ".apify/skills",
 };
 
 const suggestedSearches = [
