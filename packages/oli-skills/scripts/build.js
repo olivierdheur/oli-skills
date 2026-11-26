@@ -23,6 +23,10 @@ const SKILL_SOURCES = [
   { source: '21st', path: '.21st/skills' },
   { source: 'bradautomates', path: '.bradautomates/skills' },
   { source: 'apify', path: '.apify/skills' },
+  { source: 'langchain', path: '.langchain/skills' },
+  { source: 'aws', path: '.aws/skills' },
+  { source: 'owasp', path: '.owasp/skills' },
+  { source: 'phaedra', path: '.phaedra/skills' },
 ];
 
 console.log('Building oli-skills package...\n');

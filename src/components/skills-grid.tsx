@@ -99,6 +99,30 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "Apify",
     active: "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25",
   },
+  langchain: {
+    badge: "border-green-400/50 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-950/50 dark:text-green-300",
+    icon: "from-green-500 to-emerald-500",
+    label: "LangChain",
+    active: "bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/25",
+  },
+  aws: {
+    badge: "border-orange-400/50 bg-orange-50 text-orange-700 dark:border-orange-500/30 dark:bg-orange-950/50 dark:text-orange-300",
+    icon: "from-orange-500 to-yellow-500",
+    label: "AWS",
+    active: "bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg shadow-orange-500/25",
+  },
+  owasp: {
+    badge: "border-red-400/50 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-950/50 dark:text-red-300",
+    icon: "from-red-600 to-red-400",
+    label: "OWASP",
+    active: "bg-gradient-to-r from-red-600 to-red-400 text-white shadow-lg shadow-red-500/25",
+  },
+  phaedra: {
+    badge: "border-fuchsia-400/50 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-500/30 dark:bg-fuchsia-950/50 dark:text-fuchsia-300",
+    icon: "from-fuchsia-500 to-pink-500",
+    label: "Phaedra",
+    active: "bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white shadow-lg shadow-fuchsia-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -183,6 +207,10 @@ const sourceToPath: Record<string, string> = {
   "21st": ".21st/skills",
   bradautomates: ".bradautomates/skills",
   apify: ".apify/skills",
+  langchain: ".langchain/skills",
+  aws: ".aws/skills",
+  owasp: ".owasp/skills",
+  phaedra: ".phaedra/skills",
 };
 
 const suggestedSearches = [

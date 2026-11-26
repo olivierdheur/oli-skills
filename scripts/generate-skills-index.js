@@ -21,6 +21,10 @@ const SKILLS_DIRS = [
   { path: ".21st/skills", source: "21st" },
   { path: ".bradautomates/skills", source: "bradautomates" },
   { path: ".apify/skills", source: "apify" },
+  { path: ".langchain/skills", source: "langchain" },
+  { path: ".aws/skills", source: "aws" },
+  { path: ".owasp/skills", source: "owasp" },
+  { path: ".phaedra/skills", source: "phaedra" },
 ];
 
 // Hierarchical category structure: "Parent > Subcategory"
