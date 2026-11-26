@@ -201,6 +201,54 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "Legal AI Skills",
     active: "bg-gradient-to-r from-amber-600 to-orange-500 text-white shadow-lg shadow-amber-500/25",
   },
+  "social-media": {
+    badge: "border-pink-400/50 bg-pink-50 text-pink-700 dark:border-pink-500/30 dark:bg-pink-950/50 dark:text-pink-300",
+    icon: "from-pink-500 to-rose-500",
+    label: "Social Media",
+    active: "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/25",
+  },
+  "aaron-marketing": {
+    badge: "border-violet-400/50 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-950/50 dark:text-violet-300",
+    icon: "from-violet-500 to-purple-500",
+    label: "Aaron Marketing",
+    active: "bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-lg shadow-violet-500/25",
+  },
+  "business-skills": {
+    badge: "border-blue-400/50 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/50 dark:text-blue-300",
+    icon: "from-blue-500 to-indigo-500",
+    label: "Business Skills",
+    active: "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25",
+  },
+  pawbytes: {
+    badge: "border-cyan-400/50 bg-cyan-50 text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-950/50 dark:text-cyan-300",
+    icon: "from-cyan-500 to-teal-500",
+    label: "Pawbytes",
+    active: "bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/25",
+  },
+  affitor: {
+    badge: "border-orange-400/50 bg-orange-50 text-orange-700 dark:border-orange-500/30 dark:bg-orange-950/50 dark:text-orange-300",
+    icon: "from-orange-500 to-amber-500",
+    label: "Affitor",
+    active: "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25",
+  },
+  "content-creation": {
+    badge: "border-fuchsia-400/50 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-500/30 dark:bg-fuchsia-950/50 dark:text-fuchsia-300",
+    icon: "from-fuchsia-500 to-pink-500",
+    label: "Content Creation",
+    active: "bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white shadow-lg shadow-fuchsia-500/25",
+  },
+  copywriting: {
+    badge: "border-red-400/50 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-950/50 dark:text-red-300",
+    icon: "from-red-500 to-rose-500",
+    label: "Copywriting",
+    active: "bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/25",
+  },
+  fyp: {
+    badge: "border-sky-400/50 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/50 dark:text-sky-300",
+    icon: "from-sky-500 to-blue-500",
+    label: "FYP Skills",
+    active: "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -283,6 +331,11 @@ const categoryIcons: Record<string, string> = {
   "Corporate": "🏢",
   "IP": "💡",
   "Employment": "👔",
+  "Social Media": "📱",
+  "Affiliate": "🔗",
+  "Ads": "📢",
+  "Copywriting": "✍️",
+  "Influencer": "⭐",
   "Specialist": "🎯",
 };
 
@@ -317,6 +370,14 @@ const sourceToPath: Record<string, string> = {
   "uk-legal": ".uk-legal/skills",
   "ai-legal": ".ai-legal/skills",
   "ukummar-legal": ".ukummar-legal/skills",
+  "social-media": ".social-media/skills",
+  "aaron-marketing": ".aaron-marketing/skills",
+  "business-skills": ".business-skills/skills",
+  pawbytes: ".pawbytes/skills",
+  affitor: ".affitor/skills",
+  "content-creation": ".content-creation/skills",
+  copywriting: ".copywriting/skills",
+  fyp: ".fyp/skills",
 };
 
 const suggestedSearches = [

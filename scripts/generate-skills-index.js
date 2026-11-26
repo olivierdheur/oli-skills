@@ -38,6 +38,14 @@ const SKILLS_DIRS = [
   { path: ".uk-legal/skills", source: "uk-legal" },
   { path: ".ai-legal/skills", source: "ai-legal" },
   { path: ".ukummar-legal/skills", source: "ukummar-legal" },
+  { path: ".social-media/skills", source: "social-media" },
+  { path: ".aaron-marketing/skills", source: "aaron-marketing" },
+  { path: ".business-skills/skills", source: "business-skills" },
+  { path: ".pawbytes/skills", source: "pawbytes" },
+  { path: ".affitor/skills", source: "affitor" },
+  { path: ".content-creation/skills", source: "content-creation" },
+  { path: ".copywriting/skills", source: "copywriting" },
+  { path: ".fyp/skills", source: "fyp" },
 ];
 
 // Hierarchical category structure: "Parent > Subcategory"
@@ -49,7 +57,14 @@ const categoryPatterns = [
   { category: "Security > Auth", patterns: [/auth/i, /oauth/i, /jwt/i, /session/i, /identity/i, /login/i] },
   { category: "Security > General", patterns: [/security/i, /vulnerab/i, /penetration/i, /owasp/i, /dread-forge/i, /secops/i, /appsec/i] },
   
-  // Marketing Research (must be before AI > Video to avoid false matches on "video")
+  // Social Media & Marketing (before AI patterns)
+  { category: "Marketing > Social Media", patterns: [/instagram/i, /tiktok/i, /linkedin/i, /twitter/i, /threads/i, /facebook/i, /pinterest/i, /youtube/i, /reels/i, /shorts/i, /social/i] },
+  { category: "Marketing > Affiliate", patterns: [/affiliate/i, /landing.?page/i, /squeeze/i, /bonus.?stack/i, /offer/i, /conversion/i, /cro/i] },
+  { category: "Marketing > Email", patterns: [/email/i, /newsletter/i, /drip/i, /sequence/i, /deliverability/i, /outreach/i, /cold.?email/i] },
+  { category: "Marketing > Ads", patterns: [/ads/i, /ppc/i, /meta.?ads/i, /google.?ads/i, /paid/i, /retargeting/i, /campaign/i] },
+  { category: "Marketing > Copywriting", patterns: [/copywriting/i, /copy/i, /headline/i, /sales.?page/i, /vsl/i, /direct.?response/i, /funnel/i] },
+  { category: "Marketing > Influencer", patterns: [/influencer/i, /creator/i, /ugc/i, /ambassador/i, /partnership/i] },
+  { category: "Marketing > Content", patterns: [/content/i, /blog/i, /video.?script/i, /hook/i, /caption/i, /calendar/i, /thumbnail/i] },
   { category: "Marketing > Research", patterns: [/instagram-research/i, /tiktok-research/i, /youtube-research/i, /x-research/i, /content-ideas/i, /content-planner/i, /video-content-analyzer/i, /focus-group/i] },
   
   // Legal (before Business patterns)
