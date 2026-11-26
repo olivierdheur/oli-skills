@@ -36,16 +36,23 @@ const categoryPatterns = [
   { category: "Security > Auth", patterns: [/auth/i, /oauth/i, /jwt/i, /session/i, /identity/i, /login/i] },
   { category: "Security > General", patterns: [/security/i, /vulnerab/i, /penetration/i, /owasp/i, /dread-forge/i, /secops/i, /appsec/i] },
   
+  // Marketing Research (must be before AI > Video to avoid false matches on "video")
+  { category: "Marketing > Research", patterns: [/instagram-research/i, /tiktok-research/i, /youtube-research/i, /x-research/i, /content-ideas/i, /content-planner/i, /video-content-analyzer/i, /focus-group/i] },
+  
+  // Workflow specifics (before AI patterns)
+  { category: "Workflow > General", patterns: [/second-brain/i] },
+  
   // AI & Automation
+  { category: "AI > Video", patterns: [/heygen/i, /hyperframes/i, /video/i, /avatar/i, /translate.*dub/i, /slideshow/i, /media-use/i, /reverse-any-video/i] },
   { category: "AI > Agents", patterns: [/agent/i, /subagent/i, /sandcastle/i, /orchestrat/i, /agentic/i] },
   { category: "AI > LLM Patterns", patterns: [/llm/i, /prompt/i, /token/i, /context.?window/i, /guardrail/i, /ai-sdk/i] },
   { category: "AI > Coding Dictionary", patterns: [/dictionary/i, /glossary/i, /terminology/i] },
-  { category: "AI > Tools", patterns: [/tool.?call/i, /mcp/i, /model.?provider/i] },
+  { category: "AI > Tools", patterns: [/tool.?call/i, /mcp/i, /model.?provider/i, /\bwatch\b/i] },
   { category: "AI > General", patterns: [/\bai\b/i, /machine.?learn/i, /neural/i, /model(?!ing)/i] },
   
   // Design & UI
   { category: "Design > Animation", patterns: [/animat/i, /motion/i, /spring/i, /transition/i, /easing/i, /keyframe/i] },
-  { category: "Design > Components", patterns: [/component/i, /button/i, /dialog/i, /modal/i, /sonner/i, /toast/i] },
+  { category: "Design > Components", patterns: [/component/i, /button/i, /dialog/i, /modal/i, /sonner/i, /toast/i, /21st/i, /registry/i] },
   { category: "Design > UI Patterns", patterns: [/design/i, /ui\b/i, /layout/i, /style/i, /accessibility/i, /a11y/i, /mobile-native/i] },
   { category: "Design > Prototyping", patterns: [/prototype/i, /wireframe/i, /mockup/i, /figma/i] },
   
@@ -88,11 +95,11 @@ const categoryPatterns = [
   { category: "Marketing > SEO", patterns: [/seo/i, /search.?engine/i, /keyword/i, /backlink/i, /serp/i, /schema/i, /sitemap/i] },
   { category: "Marketing > Ads & PPC", patterns: [/ads/i, /ppc/i, /facebook.?ad/i, /google.?ad/i, /campaign/i] },
   { category: "Marketing > Email", patterns: [/email/i, /newsletter/i, /cold.?email/i, /outreach/i] },
-  { category: "Marketing > Social", patterns: [/social/i, /twitter/i, /linkedin/i, /influencer/i, /community/i] },
+  { category: "Marketing > Social", patterns: [/social/i, /twitter/i, /linkedin/i, /influencer/i, /community/i, /instagram/i, /tiktok/i, /youtube-research/i, /x-research/i] },
   { category: "Marketing > Conversion", patterns: [/cro/i, /conversion/i, /landing/i, /signup/i, /onboard/i, /pricing/i, /paywall/i] },
   { category: "Marketing > Content", patterns: [/content/i, /copywriting/i, /copy/i, /blog/i, /article/i] },
   { category: "Marketing > Analytics", patterns: [/analytics/i, /attribution/i, /tracking/i, /metrics/i] },
-  { category: "Marketing > General", patterns: [/marketing/i, /growth/i, /launch/i, /product/i] },
+  { category: "Marketing > General", patterns: [/marketing/i, /growth/i, /launch/i, /product/i, /focus.?group/i] },
   
   // Content & Writing
   { category: "Writing > Technical", patterns: [/document/i, /readme/i, /api.?doc/i, /technical.?writ/i] },
@@ -100,10 +107,10 @@ const categoryPatterns = [
   { category: "Writing > General", patterns: [/writ/i, /edit/i, /proofread/i] },
   
   // Workflow & Process
-  { category: "Workflow > Planning", patterns: [/plan/i, /brainstorm/i, /spec/i, /requirement/i] },
+  { category: "Workflow > Planning", patterns: [/plan/i, /brainstorm/i, /spec/i, /requirement/i, /questionnaire/i] },
   { category: "Workflow > Execution", patterns: [/execut/i, /implement/i, /build/i] },
   { category: "Workflow > Review", patterns: [/review/i, /debug/i, /diagnos/i, /refactor/i] },
-  { category: "Workflow > General", patterns: [/workflow/i, /process/i, /superpowers/i] },
+  { category: "Workflow > General", patterns: [/workflow/i, /process/i, /superpowers/i, /second.?brain/i, /\bteach\b/i] },
   
   // Data Science
   { category: "Data > Analysis", patterns: [/data.?analy/i, /pandas/i, /statistics/i, /visualization/i] },
@@ -154,7 +161,15 @@ function getSkillsFromDir(dirPath, source) {
       }
 
       const skillName = data.name || slug;
-      const skillDescription = data.description || "";
+      
+      // Extract description from YAML frontmatter, or from blockquote (> ...) in content
+      let skillDescription = data.description || "";
+      if (!skillDescription && content) {
+        const blockquoteMatch = content.match(/^>\s*(.+)$/m);
+        if (blockquoteMatch) {
+          skillDescription = blockquoteMatch[1].trim();
+        }
+      }
 
       return {
         slug: `${source}/${slug}`,
