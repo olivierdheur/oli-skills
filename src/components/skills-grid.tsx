@@ -75,6 +75,12 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "Jim Manico",
     active: "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg shadow-red-500/25",
   },
+  heygen: {
+    badge: "border-purple-400/50 bg-purple-50 text-purple-700 dark:border-purple-500/30 dark:bg-purple-950/50 dark:text-purple-300",
+    icon: "from-purple-500 to-pink-500",
+    label: "HeyGen",
+    active: "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -155,6 +161,7 @@ const sourceToPath: Record<string, string> = {
   agency: ".agency/skills",
   mattpocock: ".mattpocock/skills",
   jmanico: ".jmanico/skills",
+  heygen: ".heygen/skills",
 };
 
 const suggestedSearches = [
@@ -473,19 +480,23 @@ export function SkillsGrid({ skills, onFilteredCountChange }: SkillsGridProps) {
                     </button>
                     {hasMultipleSubs && (
                       <button
-                        onClick={() => toggleParentExpand(parentName)}
-                        className={`filter-pill px-1.5 py-1.5 rounded-lg rounded-l-none text-xs font-medium border-l border-zinc-300/50 dark:border-zinc-600/50 ${
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleParentExpand(parentName);
+                        }}
+                        className={`filter-pill px-2 py-1.5 rounded-lg rounded-l-none text-xs font-medium border-l border-zinc-300/50 dark:border-zinc-600/50 hover:bg-zinc-200 dark:hover:bg-zinc-700 ${
                           isParentActive || isSubActive
-                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-md"
-                            : "text-zinc-600 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
+                            ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900 shadow-md"
+                            : "text-zinc-500 dark:text-zinc-400 bg-zinc-100/80 dark:bg-zinc-800/80"
                         }`}
+                        title="Show subcategories"
                       >
                         <svg
-                          className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
-                          strokeWidth={2}
+                          strokeWidth={2.5}
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>
