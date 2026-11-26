@@ -1,0 +1,287 @@
+---
+name: minimaxh3
+description: MiniMax H3 video workflows in Comfiest — Pika H3 Flex 6-step default plus 14 fastvideo reference-permutation variants, 8-second audio-video clips, resolution/timing, forced-audio lip-sync, and execution notes.
+---
+
+# MiniMax H3 Family
+
+> Operating rules live in `../SKILL.md`. Workflow JSON in `../../workflows/minimaxh3/` is a
+> **template**: do not edit or re-save a shipped file for a run. Copy it to `../../work/scratch/`
+> first. Scratch files and outputs go in `../../work/`.
+
+MiniMax H3 generates an 8-second, 9:16 clip with synchronized generated audio from text and optional
+picture/video/audio references. **Pika H3 Flex is the default generation path**: 6-step LCM, 24 fps,
+stronger text/signage/edge/reference quality. See [`../minimaxh3-pika/SKILL.md`](../minimaxh3-pika/SKILL.md).
+The fastvideo variants below are the faster 8-step generation path (v1.2 turbo, RIFE to 48 fps).
+
+**Do not use the fastvideo 4-step preset as a 768P draft for 2K/IC.** On the same prompt and seed it
+carried ~3× the Laplacian and ~1.6× the flicker of Pika even with its full LoRA stack, and ~7×/2× when
+stripped to the motion/dareties pair. Use the Pika 6-step contract for any draft that will be refined.
+
+## Files
+
+- `../../workflows/minimaxh3/api/pika-h3-*.api.json` — Pika H3 Flex default graphs (T2V, FL2VA, Ref2VA).
+- `../../workflows/minimaxh3/*.json` — UI-format fastvideo workflows. Open these in ComfyUI.
+- `../../workflows/minimaxh3/text2video-minimax-base.json` — the 97-node base/control surface. Use it
+  only for slots the variants do not expose; it is not a production run file.
+- `../../workflows/minimaxh3/api/*.api.json` — pre-slimmed API workflows for `run_workflow`.
+- `../minimaxh3-character-replace/SKILL.md` — SAM3 + depth-guided motion guide + character-replacement
+  guide.
+- `../minimaxh3-upscale/SKILL.md` — 2K t2v/v2v latent upscale, 2-step re-synthesis refiner, and 3-step IC fidelity refiner.
+- `../viggle-remake/SKILL.md` — Viggle Remake H3 LoRA pair for recasting and editing clips.
+- `../minimaxh3-perfect-loop/SKILL.md` — seamless 154-frame T2AV loop, seam math, and save path.
+- `../sam3/SKILL.md` — native SAM3 mattes when you only need segmentation, not a full replacement.
+
+**Pika default graphs** (API-first, 6-step):
+
+| ID | API file | Inputs |
+| - | - | - |
+| `pika-t2v` | `pika-h3-t2v.api.json` | text |
+| `pika-fl2va` | `pika-h3-fl2va.api.json` | text + first/last image |
+| `pika-ref2va` | `pika-h3-ref2va.api.json` | text + reference image |
+
+## Variant matrix
+
+Each fastvideo UI file has a matching API mirror; the character-replacement workflows are API-first. The
+Pika graphs are API-first only. File names below are relative to `../../workflows/minimaxh3/`.
+
+| ID | UI file | Inputs | Historical status |
+| - | - | - | - |
+| `t2v` | `text2video-minimax-t2v.json` | text only | verified (RIFE) |
+| `1p` | `ref2video-minimax-1p.json` | `picture_1` | verified (production) |
+| `2p` | `ref2video-minimax-2p.json` | `picture_1`, `picture_2` | input-verified |
+| `1v` | `ref2video-minimax-1v.json` | `video_1` | input-verified |
+| `1p1v` | `ref2video-minimax-1p1v.json` | `picture_1`, `video_1` | verified (RIFE) |
+| `1p1a` | `ref2video-minimax-1p1a.json` | `picture_1`, `audio_1` | verified (production) |
+| `1p1a-yue2` | `ref2video-minimax-1p1a-yue2.json` | `picture_1`, Yue2 audio | verified (RIFE, 2 s test) |
+| `1v1a` | `ref2video-minimax-1v1a.json` | `video_1`, `audio_1` | generated |
+| `1p1v1a` | `ref2video-minimax-1p1v1a.json` | `picture_1`, `video_1`, `audio_1` | generated |
+| `2p1v` | `ref2video-minimax-2p1v.json` | `picture_1`, `picture_2`, `video_1` | generated |
+| `2p1a` | `ref2video-minimax-2p1a.json` | `picture_1`, `picture_2`, `audio_1` | generated |
+| `2p1v1a` | `ref2video-minimax-2p1v1a.json` | `picture_1`, `picture_2`, `video_1`, `audio_1` | generated |
+| `1a-forced` | `ref2video-minimax-1a-forced.json` | `audio_1` + forced audio latent | verified (lip-sync) |
+| `1p1a-forced` | `ref2video-minimax-1p1a-forced.json` | `picture_1`, `audio_1` + forced audio latent | verified (lip-sync) |
+
+“Historical status” describes the configuration before sanitization. Run your own job before relying
+on a variant.
+
+**Forced-audio variants.** `1a-forced` and `1p1a-forced` replace the sampler's starting audio latent
+with an encoded reference track (`LoadAudio` → `VAEEncodeAudio` → zero `SetLatentNoiseMask` →
+`LTXVConcatAVLatent` → sampler `latent_image`) so the output audio follows the supplied track. They
+default to 1.0 MP and 8 s. Save prefixes: `MINIMAX_1A_FORCED` and `MINIMAX_1P1A_FORCED`.
+
+All fastvideo variants use the original 8-second length (192 frames at 24 fps, then RIFE to 48 fps). Generate
+with headroom and trim to the edit timeline; the requested duration can be quantized.
+
+For the `*a` variants, `a` means an **audio reference**, not an audio-driven lip-sync track; the model
+generates its own audio and the mouth follows that. The `*-forced` variants are the exception.
+
+## Input slots
+
+| Slot | Default filename | Loader |
+| - | - | - |
+| `picture_1` | `example.png` | `LoadImage` #284 |
+| `picture_2` | `example.png` | `LoadImage` #285 |
+| `video_1` | `example.mp4` | `LoadVideo` #293 → `GetVideoComponents` #294 |
+| `audio_1` | `example.wav` | `LoadAudio` #290 |
+
+`upload_file` keeps the local filename unless the target already has that name (it then writes
+`name (1).ext`; use the returned `cloud_name`). Every image slot defaults to `example.png`, every video
+slot to `example.mp4`, and every audio slot to `example.wav`. Upload the file once per type, or replace
+individual slots with your own names.
+
+`1a-forced` uses `audio_1` only; `1p1a-forced` uses `picture_1` + `audio_1`. Both read the audio through
+the same `LoadAudio` #290 slot and force it into the sampler's audio latent.
+
+**References do not control cast count.** Two reference images can still produce a third performer;
+nothing in the graph enforces “two pictures means two people”. State the cast explicitly and bind each
+person to a tag, for example:
+
+```text
+Exactly two women in frame, nobody else anywhere in the shot:
+<Picture 1> the lead ..., <Picture 2> the dancer ...
+```
+
+This is the single largest cause of unusable multi-character shots.
+
+## Running a variant
+
+Use the API file, not the UI file, for MCP execution (resolve `<repo>` to the repository root):
+
+```js
+const run = await tools["comfy-<host>-<port>"].run_workflow({
+  workflow_path: "<repo>/workflows/minimaxh3/api/ref2video-minimax-1p1v.api.json",
+  wait: false,
+});
+
+const job = await tools["comfy-<host>-<port>"].job({
+  action: "wait",
+  prompt_id: run.prompt_id,
+  timeout_seconds: 600,
+});
+```
+
+Run one job per target. Parallel work is allowed only across different targets. Download the output URL
+and size-check it; do not visually inspect it unless it is your own output and provenance is recorded.
+
+To inspect a workflow, open the UI file in ComfyUI. The rgthree `Fast Groups Bypasser` nodes are
+present for editing; the API files omit them. Do not save over the template file; work on a copy in
+`../../work/scratch` if you need to change it.
+
+Leave every `SaveImage`/`VHS_VideoCombine` save prefix exactly as shipped. Identify and collect runs by
+`prompt_id`; changing the prefix scatters untraceable files through the shared ComfyUI `output/` tree.
+
+## Resolution and timing
+
+**Pika default:** 736×416 at 124 frames (5.17 s), 24 fps, no RIFE; local ceiling is 768p. Change
+width/height/length directly on the graph. **Fastvideo variants:** the scaling rules below apply.
+
+- The `Resolution Selector` is driven by the outer `megapixels` widget on the settings subgraph, not
+  by the `width`/`height` widgets on the R2V node.
+- `0.3` MP (default) = **416×736** for 9:16.
+- `1.0` MP = **768×1376**. For a 768×1344 master, crop 16 px top and bottom. 1.0 MP is roughly three
+  times heavier than 0.3 MP; a 24 GB card handles it with one job per target.
+- Default to `0.3` MP for b-roll, dance, and wide shots; use `1.0` MP for hero and close-up shots.
+  Do not mix the two in one cut without a reason; the difference reads as a quality jump.
+- `length` is a frame count at 24 fps, not seconds; it steps by 17 and the trained range is roughly
+  124–362 frames. RIFE doubles the result to 48 fps.
+- **`length=192` is not 8.000 s.** RIFE emits 383 frames, not 384: 7.979 s of picture. The container
+  reports about 8.064 s because of the AAC tail. Do not build an edit on 8.000 s; read the video stream
+  (`ffprobe -select_streams v:0 -show_entries stream=duration,nb_frames,avg_frame_rate`) or pad/trim
+  explicitly. `tpad=stop_mode=clone:stop_duration=<shortfall>` pads by that amount; requesting 209
+  frames (8.708 s) and trimming also works.
+- All variants produce an audio stream, including `1p` b-roll. Discard it in post and use the master
+  track.
+
+## Compatibility fixes applied to every variant
+
+1. **RIFE is active on every fastvideo variant.** `FL_RIFE` (#310) and the 48 fps target (#168) are active.
+   The earlier `'dict' object has no attribute 'shape'` failure was not a RIFE incompatibility:
+   `Final Images` was selecting a bypassed upscale latent, so RIFE received a latent dict instead of
+   decoded images.
+2. **Final switches fixed.** `Final Images` (#267) and `Final Audio` (#261) must select the active
+   single-pass decoders (#259 / #258), not `any_01` from the bypassed upscale path. Disconnect
+   `any_01`.
+3. **UI-only nodes stripped from API.** `Fast Groups Bypasser (rgthree)` and `Label (rgthree)` are
+   frontend helpers; the target rejects them with `missing_node_type`.
+
+## Continuity techniques
+
+- **First-frame conditioning:** activate `ImageResizeKJv2` (#274), `GetImageSize` (#276), and
+  `MiniMaxH3AddGuide` (#272) with the keyframe in `LoadImage` (#284). The API graph then carries a
+  `MiniMaxH3AddGuide` node fed by the keyframe and the model latent.
+- **Reference tags:** use `<Picture i>`, `<Video k>`, and `<Audio j>` in the prompt to bind instructions
+  to the numbered references; the node presents them in that order.
+- **`ref_image_size`:** `max` uses the reference pipeline's 2048 px short edge (slower, stronger
+  identity); `match` scales to the generation's pixel area.
+- **Video-reference carry:** upload a previous clip as `video_1` and use `ref_videos.ref_video_0`.
+  Disconnect `ref_video_audios.ref_video_audio_0` so the video contributes style/motion but not
+  competing audio. Keep the character keyframe as `picture_1`.
+- **Fixed seeds:** the `easy seed` node (#16) is fixed per shot. Reuse it when comparing variants;
+  vary it per shot when you want different motion.
+- **One job per target:** submit and wait on one target before sending the next job to that target.
+
+## Lip-sync
+
+- `ref_audios.ref_audio_N` is “standalone reference audio”; `ref_video_audios.ref_video_audio_N` is the
+  soundtrack of a reference video. Both are reference conditioning, encoded as audio latents — not a
+  forced output waveform.
+- MiniMax H3 samples its own audio and video. The mouth follows the generated audio. Supplying a vocal
+  segment does not guarantee it will rap those words; it may generate different words and timing.
+- **Prompting it as the final soundtrack is not enough.** An A/B test with a TTS line and the same
+  seed/keyframe showed the explicit “this IS the clip's audio” prompt changed the generated audio's
+  content — it picked up a word from the source — but the output was still a new performance with
+  different timing. Treat prompt wording as a content steer, not an audio passthrough.
+- **Forced audio latent (working method).** Replace the generation's audio latent with the target
+  audio before sampling:
+  1. `MiniMaxH3ReferenceToVideo` LATENT (joint AV) → `LTXVSeparateAVLatent` → `video_latent`.
+  2. `LoadAudio` → `VAEEncodeAudio` with the **audio VAE** → `audio_latent`.
+  3. `SolidMask` value `0` (32×32) → `SetLatentNoiseMask` on the audio latent.
+  4. `LTXVConcatAVLatent(video_latent, masked_audio_latent)` → the sampler's `latent_image`.
+  The zero noise mask keeps the audio fixed; the sampler generates video against the real audio. The
+  output audio matches the input and the mouth follows it. Keep `MiniMaxH3AddGuide` on the model's
+  original AV latent for first-frame conditioning; only the sampler's starting latent is replaced.
+  This is the Endless MiniMax H3 `Use Custom Audio` technique. It works with music/vocal segments, not
+  just clean speech.
+- Apply the forced latent per performance shot, with the exact audio segment and a clip length at
+  least as long as the segment. `LTXVConcatAVLatent` trims or zero-pads the audio to the video length.
+- Audio-driven gallery workflows (LTX-2.3 Image Audio to Video, Wan2.2-S2V, InfiniteTalk, HuMo) and
+  dedicated lip-sync passes (Wav2Lip, LatentSync) remain alternatives.
+- The audio-reference variants (`1p1a`, `1p1a-yue2`, `1v1a`, `1p1v1a`, `2p1a`, `2p1v1a`) are not
+  lip-sync variants by themselves; use `1a-forced` or `1p1a-forced` for the forced-audio chain. A
+  lip-sync pass works best on frontal close/medium shots; wide and profile shots may not have enough
+  face detail.
+- **Measure the force; do not assume it took.** Extract the clip audio and compare mel spectrograms
+  against the exact source segment; require correlation ≥ 0.96. A fresh forced shot measured 0.9687,
+  and a finished 60 s mix measured 0.9949 against the same segment. If the force did not take, the
+  output still looks plausible and the mouth is simply wrong.
+- **Non-sync shots should be prompted with mouths closed.** Dance, group, and wide shots often use
+  reference or t2v variants whose generated audio will not match the master. `lips closed, no singing`
+  turns a moving mouth into choreography and lets you use those variants for motion-heavy footage
+  without a sync constraint.
+
+## Character replacement (API-first)
+
+Three API workflows replace the performer in a source video with a different character. They combine
+SAM3 person segmentation, a depth-guided motion guide (`DepthAnythingTensorrt` with
+`depth_anything_v2_vitl-fp16.engine`), and the forced source audio. Full instructions:
+`../minimaxh3-character-replace/SKILL.md`.
+
+The original character-swap LoRA (`h3_character_swap_v1.5`) was removed for the public release. The
+graphs keep the segmentation, depth guide, and forced-audio chain; add the LoRA in a scratch copy if
+you need its stronger identity transfer. Sanitized outputs are untested.
+
+| ID | API file | Inputs | Background |
+| - | - | - | - |
+| `charreplace-keepbg` | `api/ref2video-minimax-charreplace-keepbg.api.json` | source video, character image | source video |
+| `charreplace-charbg` | `api/ref2video-minimax-charreplace-charbg.api.json` | source video, character image | character image |
+| `charreplace-refbg` | `api/ref2video-minimax-charreplace-refbg.api.json` | source video, character image, background image | separate background image |
+
+Stable inputs: `example.mp4`, `example.png`, and for `refbg`
+`example.png`. The workflows default to 1.0 MP, 124 frames (~5.17 s), and 48 fps after
+RIFE. The output audio is forced from the source video.
+
+## Model / LoRA stack
+
+**Pika default (6-step):** `fl2va_pruned` base + `pika_h3_flex_fl2va_v1_bf16` for T2V/FL2VA;
+`ref2va_pruned` base + `pika_h3_flex_ref2va_v1_bf16` for Ref2VA. LoRA strength 1.0, `lcm`, seven
+sigmas `1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0.0`, no sigma-shift node, no extra turbo,
+24 fps. Full contract: [`../minimaxh3-pika/SKILL.md`](../minimaxh3-pika/SKILL.md).
+
+**Fastvideo stack (8-step):**
+
+- UNET: `minimax\minimax_h3_fastvideo_vsa_datafree_1300step_4step_int8_convrot.safetensors`
+- CLIP: `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`
+- Video VAE: `minimax\minimax_h3_video_vae_fp16.safetensors`
+- Audio VAE: `minimax\minimax_h3_audio_vae_fp32.safetensors`
+
+Fastvideo active LoRA (same preset in every UI variant and API mirror):
+
+| LoRA | Strength |
+| - | - |
+| `minimax\minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors` | 0.8 |
+
+`Power Lora Loader #21` keeps one slot. The bypassed `LoraLoaderModelOnly` node holds the same turbo
+LoRA for reference. The public graphs use the **v1.2** adapter in place of the older v1.0 build; both
+are the same 4-step distilled family, and the substitution preserved forced-audio lip sync in testing
+(mel correlation 0.9687). Verify the models and LoRA on each target with the loader's
+`/object_info/<Class>` option list before a run; `/models/<folder>` can be empty even when the file is
+installed.
+
+## Verification
+
+The repository does not ship a verification manifest. The public templates were conversion-validated
+against a reference target. `text2video-minimax-t2v` was executed end-to-end on 2026-11-10
+(ComfyUI 0.45.0): `MINIMAX_T2V_00012-audio.mp4`, 2,965,988 B, 416×736, 383 f, 7.979 s, audio present —
+the 383-frame count confirms RIFE stayed active after the dead nodes were removed. The other fastvideo
+variants and the Pika graphs remain conversion-validated only. Technical completion is not creative
+approval; the user judges the result.
+
+## Runtime notes
+
+- Video generation is heavy; submit with `wait: false` and poll `job(action="wait")`.
+- If `job(action="wait")` returns a tool-level error, the server job may still be running. Poll
+  `/history/<prompt_id>` and `/queue` directly; `status_str: "success"` is the completion signal.
+- RIFE is mandatory for the fastvideo variants; do not bypass `FL_RIFE` or the 48 fps target there.
+  Pika is native 24 fps and does not use RIFE.
+- Intercut generated clips with b-roll and use a consistent grade in post.

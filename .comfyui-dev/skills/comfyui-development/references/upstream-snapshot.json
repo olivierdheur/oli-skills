@@ -1,0 +1,528 @@
+{
+  "schema_version": 1,
+  "organization": "Comfy-Org",
+  "captured_at": "2026-10-02",
+  "purpose": "Baseline of the public Comfy-Org repository universe for explicit self-maintenance. It detects repository additions, removals, default-branch changes, and archive-state changes; it is not an authority registry.",
+  "compare_fields": [
+    "default_branch",
+    "archived"
+  ],
+  "repositories": [
+    {
+      "repo": "Comfy-Org/.github",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/.github"
+    },
+    {
+      "repo": "Comfy-Org/cbyrne-custom-nodes-security-scan",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/cbyrne-custom-nodes-security-scan"
+    },
+    {
+      "repo": "Comfy-Org/cla-assistant",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/cla-assistant"
+    },
+    {
+      "repo": "Comfy-Org/comfy-action",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-action"
+    },
+    {
+      "repo": "Comfy-Org/comfy-aimdo",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-aimdo"
+    },
+    {
+      "repo": "Comfy-Org/comfy-angle",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-angle"
+    },
+    {
+      "repo": "Comfy-Org/comfy-api-proxy",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-api-proxy"
+    },
+    {
+      "repo": "Comfy-Org/comfy-cinematic-studio",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-cinematic-studio"
+    },
+    {
+      "repo": "Comfy-Org/comfy-cla",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-cla"
+    },
+    {
+      "repo": "Comfy-Org/comfy-claude-prompt-library",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-claude-prompt-library"
+    },
+    {
+      "repo": "Comfy-Org/comfy-cli",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-cli"
+    },
+    {
+      "repo": "Comfy-Org/comfy-cloud-mcp",
+      "default_branch": "main",
+      "archived": true,
+      "url": "https://github.com/Comfy-Org/comfy-cloud-mcp"
+    },
+    {
+      "repo": "Comfy-Org/comfy-codesearch-cli",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-codesearch-cli"
+    },
+    {
+      "repo": "Comfy-Org/comfy-complete",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-complete"
+    },
+    {
+      "repo": "Comfy-Org/Comfy-Desktop",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/Comfy-Desktop"
+    },
+    {
+      "repo": "Comfy-Org/comfy-examples",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-examples"
+    },
+    {
+      "repo": "Comfy-Org/comfy-kitchen",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-kitchen"
+    },
+    {
+      "repo": "Comfy-Org/comfy-mcp",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-mcp"
+    },
+    {
+      "repo": "Comfy-Org/comfy-model-tools",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-model-tools"
+    },
+    {
+      "repo": "Comfy-Org/comfy-multi-player",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-multi-player"
+    },
+    {
+      "repo": "Comfy-Org/Comfy-PR",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/Comfy-PR"
+    },
+    {
+      "repo": "Comfy-Org/comfy-python-sdk",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-python-sdk"
+    },
+    {
+      "repo": "Comfy-Org/Comfy-QA",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/Comfy-QA"
+    },
+    {
+      "repo": "Comfy-Org/comfy-qa-tools",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-qa-tools"
+    },
+    {
+      "repo": "Comfy-Org/comfy-quants",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-quants"
+    },
+    {
+      "repo": "Comfy-Org/comfy-remote-nodes",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-remote-nodes"
+    },
+    {
+      "repo": "Comfy-Org/comfy-reshoot",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-reshoot"
+    },
+    {
+      "repo": "Comfy-Org/comfy-skills",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-skills"
+    },
+    {
+      "repo": "Comfy-Org/comfy-swift-sdk",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-swift-sdk"
+    },
+    {
+      "repo": "Comfy-Org/comfy-typescript-sdk",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfy-typescript-sdk"
+    },
+    {
+      "repo": "Comfy-Org/comfyci-dashboard",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyci-dashboard"
+    },
+    {
+      "repo": "Comfy-Org/comfyci-runpod-worker",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyci-runpod-worker"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI"
+    },
+    {
+      "repo": "Comfy-Org/comfyui-benchmark",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyui-benchmark"
+    },
+    {
+      "repo": "Comfy-Org/comfyui-ci-container",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyui-ci-container"
+    },
+    {
+      "repo": "Comfy-Org/comfyui-datadog-monitor",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyui-datadog-monitor"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-embedded-workflow-editor",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-embedded-workflow-editor"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-Librarian",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-Librarian"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-Manager",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-Manager"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-Mirror",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-Mirror"
+    },
+    {
+      "repo": "Comfy-Org/comfyui-mixlab-nodes",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyui-mixlab-nodes"
+    },
+    {
+      "repo": "Comfy-Org/comfyui-native-port-guide",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyui-native-port-guide"
+    },
+    {
+      "repo": "Comfy-Org/comfyui-prompt-reader-node",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/comfyui-prompt-reader-node"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-React-Extension-Template",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-React-Extension-Template"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-Secure-V2-API-NodeDB",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-Secure-V2-API-NodeDB"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-Standalone-Environments",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-Standalone-Environments"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-test-framework",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI-test-framework"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_CatVTON_Wrapper",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI_CatVTON_Wrapper"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_devtools",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI_devtools"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_example_frontend_extension",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI_example_frontend_extension"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_frontend",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI_frontend"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_frontend_setup_action",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI_frontend_setup_action"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_legacy_frontend",
+      "default_branch": "main",
+      "archived": true,
+      "url": "https://github.com/Comfy-Org/ComfyUI_legacy_frontend"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_prev",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI_prev"
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_TensorRT",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/ComfyUI_TensorRT"
+    },
+    {
+      "repo": "Comfy-Org/cookiecutter-comfy-extension",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/cookiecutter-comfy-extension"
+    },
+    {
+      "repo": "Comfy-Org/creative-campus",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/creative-campus"
+    },
+    {
+      "repo": "Comfy-Org/custom-node-qa",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/custom-node-qa"
+    },
+    {
+      "repo": "Comfy-Org/CustomNodeComfyMath",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/CustomNodeComfyMath"
+    },
+    {
+      "repo": "Comfy-Org/desktop",
+      "default_branch": "main",
+      "archived": true,
+      "url": "https://github.com/Comfy-Org/desktop"
+    },
+    {
+      "repo": "Comfy-Org/docs",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/docs"
+    },
+    {
+      "repo": "Comfy-Org/docs-fork",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/docs-fork"
+    },
+    {
+      "repo": "Comfy-Org/download-data",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/download-data"
+    },
+    {
+      "repo": "Comfy-Org/embedded-docs",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/embedded-docs"
+    },
+    {
+      "repo": "Comfy-Org/example_workflows",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/example_workflows"
+    },
+    {
+      "repo": "Comfy-Org/fbx-exporter-three",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/fbx-exporter-three"
+    },
+    {
+      "repo": "Comfy-Org/github-workflows",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/github-workflows"
+    },
+    {
+      "repo": "Comfy-Org/homebrew-comfy-cli",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/homebrew-comfy-cli"
+    },
+    {
+      "repo": "Comfy-Org/litegraph.js",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/litegraph.js"
+    },
+    {
+      "repo": "Comfy-Org/lobe-cli-toolbox",
+      "default_branch": "master",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/lobe-cli-toolbox"
+    },
+    {
+      "repo": "Comfy-Org/NIMnodes",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/NIMnodes"
+    },
+    {
+      "repo": "Comfy-Org/node-diff",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/node-diff"
+    },
+    {
+      "repo": "Comfy-Org/Nvidia_RTX_Nodes_ComfyUI",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/Nvidia_RTX_Nodes_ComfyUI"
+    },
+    {
+      "repo": "Comfy-Org/publish-node-action",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/publish-node-action"
+    },
+    {
+      "repo": "Comfy-Org/pyisolate",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/pyisolate"
+    },
+    {
+      "repo": "Comfy-Org/python-dependencies",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/python-dependencies"
+    },
+    {
+      "repo": "Comfy-Org/quad-wireframe-three",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/quad-wireframe-three"
+    },
+    {
+      "repo": "Comfy-Org/registry-backend",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/registry-backend"
+    },
+    {
+      "repo": "Comfy-Org/registry-web",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/registry-web"
+    },
+    {
+      "repo": "Comfy-Org/rfcs",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/rfcs"
+    },
+    {
+      "repo": "Comfy-Org/strapi-cloud-template-blog-0b026dbccb",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/strapi-cloud-template-blog-0b026dbccb"
+    },
+    {
+      "repo": "Comfy-Org/Subgraph-Blueprints",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/Subgraph-Blueprints"
+    },
+    {
+      "repo": "Comfy-Org/translations",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/translations"
+    },
+    {
+      "repo": "Comfy-Org/wheels",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/wheels"
+    },
+    {
+      "repo": "Comfy-Org/workflow_templates",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/workflow_templates"
+    },
+    {
+      "repo": "Comfy-Org/workflows",
+      "default_branch": "main",
+      "archived": false,
+      "url": "https://github.com/Comfy-Org/workflows"
+    }
+  ]
+}

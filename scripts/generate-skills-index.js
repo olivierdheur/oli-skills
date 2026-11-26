@@ -46,6 +46,11 @@ const SKILLS_DIRS = [
   { path: ".content-creation/skills", source: "content-creation" },
   { path: ".copywriting/skills", source: "copywriting" },
   { path: ".fyp/skills", source: "fyp" },
+  { path: ".gen-media/skills", source: "gen-media" },
+  { path: ".pexo/skills", source: "pexo" },
+  { path: ".comfiest/skills", source: "comfiest" },
+  { path: ".media-skills/skills", source: "media-skills" },
+  { path: ".comfyui-dev/skills", source: "comfyui-dev" },
 ];
 
 // Hierarchical category structure: "Parent > Subcategory"
@@ -56,6 +61,13 @@ const categoryPatterns = [
   { category: "Security > Dependencies", patterns: [/trim-reaper/i, /dependency.?reduc/i, /supply.?chain/i] },
   { category: "Security > Auth", patterns: [/auth/i, /oauth/i, /jwt/i, /session/i, /identity/i, /login/i] },
   { category: "Security > General", patterns: [/security/i, /vulnerab/i, /penetration/i, /owasp/i, /dread-forge/i, /secops/i, /appsec/i] },
+  
+  // Video & Image Generation (before general AI patterns)
+  { category: "AI > Video Generation", patterns: [/video.?gen/i, /text.?to.?video/i, /image.?to.?video/i, /ai.?video/i, /runway/i, /luma/i, /kling/i, /pika/i, /sora/i, /veo/i, /seedance/i, /heygen/i, /synthesia/i, /avatar/i, /talking.?head/i, /video.?production/i, /video.?studio/i] },
+  { category: "AI > Image Generation", patterns: [/image.?gen/i, /text.?to.?image/i, /midjourney/i, /dall.?e/i, /stable.?diffusion/i, /flux/i, /ideogram/i, /leonardo/i, /firefly/i, /comfyui/i, /diffusion/i, /image.?studio/i, /image.?prompt/i] },
+  { category: "AI > 3D & Spatial", patterns: [/3d/i, /spatial/i, /neural.?reality/i, /icvfx/i, /virtual.?production/i, /scene/i, /terrain/i] },
+  { category: "AI > Audio Generation", patterns: [/audio/i, /music/i, /voiceover/i, /sound.?design/i, /foley/i, /dubbing/i, /dialogue/i, /mastering/i, /mixing/i] },
+  { category: "AI > Creative Direction", patterns: [/storyboard/i, /previsualization/i, /shot.?direction/i, /lighting/i, /character.?design/i, /creative.?direction/i, /performance/i] },
   
   // Social Media & Marketing (before AI patterns)
   { category: "Marketing > Social Media", patterns: [/instagram/i, /tiktok/i, /linkedin/i, /twitter/i, /threads/i, /facebook/i, /pinterest/i, /youtube/i, /reels/i, /shorts/i, /social/i] },

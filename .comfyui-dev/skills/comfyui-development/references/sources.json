@@ -1,0 +1,255 @@
+{
+  "schema_version": 3,
+  "organization": {
+    "owner": "Comfy-Org",
+    "url": "https://github.com/Comfy-Org",
+    "api_repositories_url": "https://api.github.com/orgs/Comfy-Org/repos",
+    "role": "Canonical upstream discovery namespace for official ComfyUI repositories.",
+    "policy": "All current public repositories owned by Comfy-Org are eligible official upstream sources. This registry is a curated routing index, not an exhaustive allowlist. Repository authority still depends on task relevance, target version, repository status, and whether the repository contains implementation, documentation, proposals, examples, or historical material."
+  },
+  "policy": "Use the Comfy-Org organization as the canonical upstream discovery root. Curated repository entries provide high-value routing hints only; implementation details must be read from the target/current repository rather than copied into this registry. Optional status, superseded_by, specialist, and authority_notes fields may be updated only by explicitly invoked self-maintenance or by the developer.",
+  "repositories": [
+    {
+      "repo": "Comfy-Org/comfy-api-proxy",
+      "url": "https://github.com/Comfy-Org/comfy-api-proxy",
+      "domain": "api",
+      "role": "Official API proxy/compatibility layer for self-hosted ComfyUI."
+    },
+    {
+      "repo": "Comfy-Org/comfy-claude-prompt-library",
+      "url": "https://github.com/Comfy-Org/comfy-claude-prompt-library",
+      "domain": "agent-patterns",
+      "role": "Claude/repository-oriented agent process patterns. Supplementary only; do not vendor wholesale or treat as ComfyUI implementation authority."
+    },
+    {
+      "repo": "Comfy-Org/comfy-cli",
+      "url": "https://github.com/Comfy-Org/comfy-cli",
+      "domain": "cli",
+      "role": "Official CLI and its versioned bundled agent skills. Inspect current/version-matched CLI help and comfy_cli/skills when the task uses the CLI; do not freeze command behavior here."
+    },
+    {
+      "repo": "Comfy-Org/comfy-codesearch-cli",
+      "url": "https://github.com/Comfy-Org/comfy-codesearch-cli",
+      "domain": "code-search",
+      "role": "Official code-search client for ComfyUI/custom-node/community code. Optional accelerator."
+    },
+    {
+      "repo": "Comfy-Org/Comfy-Desktop",
+      "url": "https://github.com/Comfy-Org/Comfy-Desktop",
+      "domain": "desktop",
+      "role": "Current official Comfy Desktop application. Use for desktop installation, environment, update, snapshot, migration and app-specific behavior."
+    },
+    {
+      "repo": "Comfy-Org/comfy-examples",
+      "url": "https://github.com/Comfy-Org/comfy-examples",
+      "domain": "examples",
+      "role": "Official examples, including application/API workflow examples."
+    },
+    {
+      "repo": "Comfy-Org/comfy-kitchen",
+      "url": "https://github.com/Comfy-Org/comfy-kitchen",
+      "domain": "performance",
+      "role": "Kernel library used for diffusion inference/performance work."
+    },
+    {
+      "repo": "Comfy-Org/comfy-mcp",
+      "url": "https://github.com/Comfy-Org/comfy-mcp",
+      "domain": "agent-api",
+      "role": "Official MCP integration and useful live-workflow validation/discovery patterns."
+    },
+    {
+      "repo": "Comfy-Org/comfy-model-tools",
+      "url": "https://github.com/Comfy-Org/comfy-model-tools",
+      "domain": "model-tooling",
+      "role": "Official utility scripts for packaging and converting models for ComfyUI."
+    },
+    {
+      "repo": "Comfy-Org/Comfy-PR",
+      "url": "https://github.com/Comfy-Org/Comfy-PR",
+      "domain": "upstream-ci",
+      "role": "Community/upstream PR testing and integration context."
+    },
+    {
+      "repo": "Comfy-Org/comfy-python-sdk",
+      "url": "https://github.com/Comfy-Org/comfy-python-sdk",
+      "domain": "sdk",
+      "role": "Official Python client SDK."
+    },
+    {
+      "repo": "Comfy-Org/comfy-qa-tools",
+      "url": "https://github.com/Comfy-Org/comfy-qa-tools",
+      "domain": "qa",
+      "role": "Official QA environment/tooling infrastructure."
+    },
+    {
+      "repo": "Comfy-Org/comfy-quants",
+      "url": "https://github.com/Comfy-Org/comfy-quants",
+      "domain": "quantization",
+      "role": "Official offline quantization toolkit for producing ComfyUI-loadable model checkpoints."
+    },
+    {
+      "repo": "Comfy-Org/comfy-skills",
+      "url": "https://github.com/Comfy-Org/comfy-skills",
+      "domain": "agent-tooling",
+      "role": "Official Comfy Cloud agent plugin repository. Inspect the current README; its historical flat skills directory is legacy/frozen and is not the current comfy-cli skill source."
+    },
+    {
+      "repo": "Comfy-Org/comfy-swift-sdk",
+      "url": "https://github.com/Comfy-Org/comfy-swift-sdk",
+      "domain": "sdk",
+      "role": "Official Swift client SDK."
+    },
+    {
+      "repo": "Comfy-Org/comfy-typescript-sdk",
+      "url": "https://github.com/Comfy-Org/comfy-typescript-sdk",
+      "domain": "sdk",
+      "role": "Official TypeScript client SDK."
+    },
+    {
+      "repo": "Comfy-Org/comfyci-dashboard",
+      "url": "https://github.com/Comfy-Org/comfyci-dashboard",
+      "domain": "ci",
+      "role": "Continuous integration result dashboard and compatibility signal."
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI",
+      "url": "https://github.com/Comfy-Org/ComfyUI",
+      "domain": "core-runtime",
+      "role": "Primary runtime, execution engine, server, bundled nodes, APIs and backend implementation."
+    },
+    {
+      "repo": "Comfy-Org/comfyui-benchmark",
+      "url": "https://github.com/Comfy-Org/comfyui-benchmark",
+      "domain": "performance",
+      "role": "Official benchmark extension and performance measurement reference."
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-Manager",
+      "url": "https://github.com/Comfy-Org/ComfyUI-Manager",
+      "domain": "distribution",
+      "role": "Official Manager implementation for custom-node lifecycle and ecosystem integration."
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-React-Extension-Template",
+      "url": "https://github.com/Comfy-Org/ComfyUI-React-Extension-Template",
+      "domain": "frontend-scaffolding",
+      "role": "Official React/TypeScript frontend extension template. Use as a current implementation/scaffolding example, then verify hooks/types against ComfyUI_frontend."
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI-test-framework",
+      "url": "https://github.com/Comfy-Org/ComfyUI-test-framework",
+      "domain": "testing",
+      "role": "Official workflow-oriented ComfyUI test framework and CI runner."
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_devtools",
+      "url": "https://github.com/Comfy-Org/ComfyUI_devtools",
+      "domain": "devtools",
+      "role": "Official developer/debugging custom-node tools."
+    },
+    {
+      "repo": "Comfy-Org/ComfyUI_frontend",
+      "url": "https://github.com/Comfy-Org/ComfyUI_frontend",
+      "domain": "frontend",
+      "role": "Official ComfyUI frontend implementation and frontend extension APIs/patterns."
+    },
+    {
+      "repo": "Comfy-Org/cookiecutter-comfy-extension",
+      "url": "https://github.com/Comfy-Org/cookiecutter-comfy-extension",
+      "domain": "scaffolding",
+      "role": "Official custom-node extension scaffold and packaging reference."
+    },
+    {
+      "repo": "Comfy-Org/creative-campus",
+      "url": "https://github.com/Comfy-Org/creative-campus",
+      "domain": "workflow-reference",
+      "role": "Education/community case-study workflows and assets."
+    },
+    {
+      "repo": "Comfy-Org/custom-node-qa",
+      "url": "https://github.com/Comfy-Org/custom-node-qa",
+      "domain": "qa",
+      "role": "Collaborative custom-node QA workflows and validation tooling."
+    },
+    {
+      "repo": "Comfy-Org/docs",
+      "url": "https://github.com/Comfy-Org/docs",
+      "domain": "documentation",
+      "role": "Primary official documentation, developer docs, schemas, server/API docs, custom-node docs and publishing docs."
+    },
+    {
+      "repo": "Comfy-Org/embedded-docs",
+      "url": "https://github.com/Comfy-Org/embedded-docs",
+      "domain": "documentation",
+      "role": "Help/documentation shipped for use inside ComfyUI; useful for user-facing node/help behavior."
+    },
+    {
+      "repo": "Comfy-Org/example_workflows",
+      "url": "https://github.com/Comfy-Org/example_workflows",
+      "domain": "workflow-reference",
+      "role": "Official example workflow repository."
+    },
+    {
+      "repo": "Comfy-Org/litegraph.js",
+      "url": "https://github.com/Comfy-Org/litegraph.js",
+      "domain": "frontend-history",
+      "role": "Historical standalone LiteGraph repository formerly used by ComfyUI frontend development.",
+      "specialist": "comfyui-frontend-extension",
+      "status": "superseded",
+      "superseded_by": "Comfy-Org/ComfyUI_frontend",
+      "authority_notes": "The official repository README states that LiteGraph was merged into ComfyUI_frontend. Use ComfyUI_frontend for current implementation; use this repository only when a historical compatibility target requires it."
+    },
+    {
+      "repo": "Comfy-Org/pyisolate",
+      "url": "https://github.com/Comfy-Org/pyisolate",
+      "domain": "dependency-isolation",
+      "role": "Official Python extension-isolation library. Consult when extension/custom-node dependency conflicts, isolated environments, RPC boundaries, sandboxing, or tensor sharing across isolated processes are relevant."
+    },
+    {
+      "repo": "Comfy-Org/registry-backend",
+      "url": "https://github.com/Comfy-Org/registry-backend",
+      "domain": "registry",
+      "role": "Comfy Registry and CI dashboard backend implementation."
+    },
+    {
+      "repo": "Comfy-Org/rfcs",
+      "url": "https://github.com/Comfy-Org/rfcs",
+      "domain": "standards-proposals",
+      "role": "RFCs for substantial changes to core, APIs or standards. Proposal evidence only until implemented."
+    },
+    {
+      "repo": "Comfy-Org/Subgraph-Blueprints",
+      "url": "https://github.com/Comfy-Org/Subgraph-Blueprints",
+      "domain": "subgraphs",
+      "role": "Official subgraph blueprint source/reference."
+    },
+    {
+      "repo": "Comfy-Org/workflow_templates",
+      "url": "https://github.com/Comfy-Org/workflow_templates",
+      "domain": "workflow-reference",
+      "role": "Official workflow-template source and packaging pipeline."
+    },
+    {
+      "repo": "Comfy-Org/workflows",
+      "url": "https://github.com/Comfy-Org/workflows",
+      "domain": "workflow-reference",
+      "role": "Official-org workflow collection. Reference patterns, not schema authority."
+    }
+  ],
+  "routing_policy": {
+    "default_status": "active",
+    "status_values": [
+      "active",
+      "experimental",
+      "historical",
+      "archived",
+      "superseded"
+    ],
+    "superseded_rule": "For current-upstream work, follow superseded_by. For pinned or historical targets, the older source may still be relevant.",
+    "specialist_rule": "specialist is an optional hint to an existing skill. Self-maintenance may not create new specialist skills.",
+    "maintenance_scope": [
+      "references/sources.json",
+      "references/upstream-snapshot.json"
+    ]
+  }
+}

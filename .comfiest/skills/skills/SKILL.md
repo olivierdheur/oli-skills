@@ -1,0 +1,1431 @@
+---
+name: comfiest
+description: Run the Comfiest local ComfyUI video production suite through the comfy-* MCP servers — photoreal text-to-image, identity-preserving image edits, TTS and voice cloning, song generation, and short video with generated audio. Covers model/workflow routing, template rules, submission and output collection, provenance-scoped vision, and known traps.
+---
+
+# Comfiest — Agent Skill
+
+An open, local-first video production suite for ComfyUI: image, voice, music, and video workflows that
+run on open weights through the `comfy-*` MCP servers. Read this file before the first run; treat the
+shipped workflows as templates; write everything you create under `work/`.
+
+**Scope.** All workflows are local ComfyUI graphs — no partner/cloud nodes, no API keys, no credits.
+The suite targets one or more ComfyUI hosts registered as MCP servers; each server process is bound to
+one target for its lifetime.
+
+## What is in the repository
+
+| Path | Role |
+| - | - |
+| `README.md` | Project overview, quick start, model list, and contribution guide. |
+| `COMFY-SETUP.md` | Install ComfyUI, custom nodes, models, and the TensorRT depth engine. |
+| `skills/SKILL.md` | This file: rules, routing, operating loop, and findings. |
+| `skills/*/SKILL.md` | Family and recipe subskills (MiniMax H3, H3-Image, P-H3-Image, Viggle Remake, ReCaVSR, LTX-2.5, character replacement, Fish Audio). |
+| `MCP-SETUP.md` | MCP transport, installation, client registration, and target setup. |
+| `scripts/` | `install_nodes.py`, `download_models.py` for machine setup. |
+| `workflows/` | Workflow templates; usage notes live in `skills/`. |
+| `work/` | Writable agent workspace (scratch, uploads, outputs, analysis, post, exports, logs). |
+| `LICENSE` | MIT license for this repository. |
+
+`workflows/minimaxh3/`, `workflows/h3-image/`, `workflows/ltx/`, `workflows/relayvsr/`,
+`workflows/recavsr/`, `workflows/viggle-remake/`, `workflows/ph3-image/`, `workflows/sam3/`, and
+`workflows/fishdrama3/` are workflow-family subdirectories. Their usage notes live in
+`skills/minimaxh3/`, `skills/minimaxh3-pika/`, `skills/minimaxh3-character-replace/`,
+`skills/minimaxh3-upscale/`, `skills/minimaxh3-perfect-loop/`, `skills/h3-image/`, `skills/ltx2-5/`,
+`skills/relayvsr/`, `skills/recavsr/`, `skills/viggle-remake/`, `skills/ph3-image/`, `skills/sam3/`,
+`skills/workflow-development/`, `skills/prompt-writing/`, and `skills/fish-audio-drama3/`.
+`work/` is the only writable area of the repository.
+
+```text
+<repo>/
+├── README.md
+├── LICENSE
+├── COMFY-SETUP.md
+├── MCP-SETUP.md
+├── scripts/
+│   ├── install_nodes.py
+│   ├── download_models.py
+│   ├── validate_workflow.py        # --static graph checks, or --url for a live target
+│   ├── wait_job.py                 # poll /history when the MCP wait fails
+│   ├── fetch_output.py             # download outputs when fetch_outputs fails
+│   └── comfy_api.py                # shared /history lookup with the ?max_items fallback
+├── skills/
+│   ├── SKILL.md                    # this file
+│   ├── minimaxh3/SKILL.md
+│   ├── minimaxh3-pika/SKILL.md
+│   ├── minimaxh3-character-replace/SKILL.md
+│   ├── minimaxh3-upscale/SKILL.md
+│   ├── minimaxh3-perfect-loop/SKILL.md
+│   ├── ltx2-5/SKILL.md
+│   ├── relayvsr/SKILL.md
+│   ├── recavsr/SKILL.md
+│   ├── viggle-remake/SKILL.md
+│   ├── ph3-image/SKILL.md
+│   ├── h3-image/SKILL.md
+│   ├── sam3/SKILL.md
+│   ├── workflow-development/SKILL.md
+│   ├── prompt-writing/             # eight family prompt writers + README index
+│   └── fish-audio-drama3/SKILL.md
+├── workflows/
+│   ├── *.json                      # root workflows
+│   ├── fishdrama3/                 # TTS variants + base
+│   ├── h3-image/                   # MiniMax-H3-Image T2I and edit
+│   ├── ltx/                        # LTX-2.5 t2v/ref2v/i2v
+│   ├── ph3-image/                  # P-H3-Image T2I and multi-ref edits
+│   ├── relayvsr/                   # RelayVSR X2 video upscale
+│   ├── recavsr/                    # ReCaVSR X4 streaming video upscale
+│   ├── viggle-remake/              # H3 recast/edit LoRA pair
+│   ├── sam3/                       # native image/video matte graphs
+│   └── minimaxh3/                  # H3 base, UI variants, api/ mirrors
+└── work/                           # writable workspace; see Working directory
+```
+
+## Resolving paths
+
+All paths in this file are relative to the **repository root** — the parent of the `skills/`
+directory that contains this file. Workflow paths passed to `run_workflow` are read by comfy-cli
+**on the MCP host**, not on the ComfyUI host, so resolve them to absolute paths there.
+
+- Do not copy a drive letter, mount point, or UNC path from another machine; resolve at runtime.
+- Where an example needs an absolute path, it is written as `<repo>/workflows/...` or `<repo>/work/...`.
+- The same rule applies to `out_dir` and any local file the MCP reads or writes.
+
+If the repository is shared or mounted, confirm the root once per session (for example by listing the
+directory) and reuse that absolute prefix for the session.
+
+## Hard rules
+
+### Workflow JSON is read-only
+
+- Never add, edit, reformat, re-save, rename, or delete a `.json` under `workflows/`, including
+  `workflows/minimaxh3/`, `workflows/minimaxh3/api/`, `workflows/h3-image/`, and
+  `workflows/fishdrama3/`. Preserve bytes exactly:
+  no line-ending, whitespace, or key-order normalization.
+- **Maintained additions:** the two `*-forced` UI files, their two API mirrors, the three
+  `charreplace-*` API workflows, the four `upscale-*` API workflows, the three `sam3-*` API
+  workflows, the three `pika-h3-*` API workflows, the three `image2image-fluxklein-{2,3,4}ref.json`
+  additions, the three `ltx2-5-*` API workflows, the five H3-Image API graphs, the RelayVSR UI/API
+  pair, the ReCaVSR UI/API pair, the Viggle Remake UI/API pairs, the P-H3-Image UI/API additions, and
+  `perfect-loop-minimax-h3.api.json` are maintained rather than one-off templates.
+  Edit them only on an explicit user request.
+- **Markdown documentation lives in `skills/`.** Inventory and usage notes belong in this file or in
+  the family/recipe subskills (`skills/minimaxh3/`, `skills/minimaxh3-character-replace/`,
+  `skills/minimaxh3-upscale/`, `skills/minimaxh3-perfect-loop/`, `skills/sam3/`,
+  `skills/fish-audio-drama3/`). Do not add Markdown to `workflows/`.
+- **Runtime edits are allowed; saving is not.** Change widgets and links in the ComfyUI UI for a run,
+  but do not save over a workflow file. For a modified graph, write a copy under `work/scratch/` and
+  never copy it back into a workflow directory.
+- **Never change save prefixes.** Leave `filename_prefix` on `SaveImage`, `VHS_VideoCombine`,
+  `SaveAudio`, and `SaveAudioAdvanced` exactly as shipped — including in scratch copies. Output
+  identity is the `prompt_id`; a changed prefix scatters untraceable files through the shared ComfyUI
+  `output/` tree. Collect into `work/outputs/<project>/<date>/<prompt_id>/` instead. This is not valid
+  workflow-editing etiquette; only change a prefix if the user explicitly asks for it.
+- **Do not point file-writing tools at the workflow tree.** `set_workflow_slot`, `vary_workflow`,
+  `fetch_template`, `emit_partner_workflow`, and similar tools create or modify JSON; use
+  `work/scratch/` for their output.
+- **If a workflow JSON change looks necessary, stop and ask the user.** Documentation corrections are
+  normal maintenance; workflow files are not.
+
+### Local-only nodes and models
+
+- Never use a node that requires an API key, cloud account, hosted partner model, or external
+  service. This excludes `MiniMaxMusicNode` (the API integration, not the local model),
+  `ComfyCloud*`, `Sonilo*`, and partner nodes.
+- **Music:** YuE2 (`workflows/text2music-yue2.json`) or MiniMax Music 3
+  (`workflows/text2music-minimaxmusic3.json`). **Speech:** Fish Audio Drama 3
+  (`workflows/fishdrama3/tts-fishdrama3-base.json` and its variants). Do not substitute Chatterbox, F5, Qwen3-TTS,
+  VibeVoice, IndexTTS, or a cloud TTS/music service.
+- Never pass `confirm_spend=True` without explicit user approval. The workflows here should never
+  reach a spending node in the first place.
+
+### One job at a time per target
+
+The `comfy-*` servers may work in parallel with each other, but never submit concurrent jobs to the
+same ComfyUI target. Concurrent image submissions and overlapping heavy jobs have taken endpoints
+down. Submit, wait for completion, then submit the next job to that target.
+
+### Run on the registered target
+
+- Use the `comfy-*` MCP server that is registered for the intended target. Do not repoint the MCP at a
+  local ComfyUI workspace or a discovered checkout unless the user asks.
+- Discover the available servers from the client's tool list. In the reference deployment the names
+  follow `comfy-<host>-<port>`, and the targets are documented in `MCP-SETUP.md`.
+- **There is no per-call target argument.** Each `comfy-mcp` process is bound to one `COMFYUI_URL` at
+  start-up; switching targets means using a different registration/process. In Code Mode, dashed server
+  names need bracket notation: `tools["comfy-<host>-<port>"]`.
+- A server name is a label; the actual target comes from `COMFYUI_URL` at start-up. Do not infer the
+  target from the name alone — confirm `comfy_target` and use the target's `/system_stats`.
+- `server_info`'s `hardware` block describes the **MCP host**, not the target host. Confirm
+  `comfy_target` before generating; use the target's `/system_stats` for GPU and RAM facts.
+- Capacity matters for routing: Drama 3 loads 38.6 GB of experts into system RAM; prefer a target with
+  enough RAM and confirm with `/system_stats`. All documented workflows assume a 24 GB-class GPU.
+
+### Vision is limited to your own inputs and outputs
+
+Vision is allowed only on media that belongs to the current agent and the current run.
+
+- **Own output:** a file returned by a `prompt_id` from a `run_workflow`, `run_template`, or
+  `generate_image` you submitted, recorded in `work/logs/run-log.md` by this session, and downloaded
+  into `work/outputs/<project>/<YYYY-MM-DD>/<prompt_id>/`.
+- **Own input:** a file you staged in `work/uploads/<project>/`, or a user-supplied file in
+  `work/inbox/<project>/` provided for this project. `inbox/` is read-only; copy to `uploads/` if you
+  need to modify it. A user-supplied file is an input only when the user provides it for this project;
+  never repurpose another agent's file as your input.
+
+Collecting your own output by `prompt_id` is not browsing the remote `output/` folder; it is the only
+permitted remote-output path. Provenance is the submission, not the location.
+
+Never use vision on another agent's files; files discovered by browsing a ComfyUI `output/`, `input/`,
+or `temp/` directory; files found through `LoadImage`/`LoadAudio` options, `/history`,
+`job(action="queue")`, a glob, or a directory scan; previews, thumbnails, screenshots, contact sheets,
+or workflow preview images that are not your own output; or any file in a shared `work/outputs/` tree
+that you cannot trace to your own `prompt_id` and run-log entry. Do not pass `inline_images=True`;
+collect the local copy.
+
+Technical verification requires a `prompt_id`, a completed job, and non-zero output size; vision is
+creative QA, not technical verification. If provenance is uncertain, do not use vision — ask the
+user. Local ASR/librosa analysis of audio for timing, words, and vocal presence is allowed.
+
+Provenance is **behavioral, not cryptographic**: the run log is shared, so a committed file proves
+intent but not exclusivity. If you need hard isolation, add a session-ID column to the run log or use
+separate output roots per agent. Legacy files directly under a date folder without a `prompt_id`
+subfolder are not eligible for vision.
+
+Prefer local vision for private or sensitive media; do not send it to a cloud vision provider without
+explicit approval.
+
+## Quick start
+
+1. **Confirm the tool and target.** `server_info()` on the registered server; check that
+   `comfy_target.host`/`port` is the intended target. If the `comfy-*` tools are not connected, read
+   `MCP-SETUP.md`.
+2. **Check health.** Query the target's `/system_stats` directly; keep one job in flight per target.
+3. **Pick a workflow** from the routing table below and read its family section before submitting.
+4. **Stage inputs** in `work/uploads/<project>/` with the exact filenames the workflow expects, then
+   upload them to every target that may run the job.
+5. **Submit** with `wait: false`, then wait explicitly:
+
+   ```js
+   const run = await tools["comfy-<host>-<port>"].run_workflow({
+     workflow_path: "<repo>/workflows/text2image-krea.json",
+     wait: false
+   });
+   await tools["comfy-<host>-<port>"].job({
+     action: "wait",
+     prompt_id: run.prompt_id,
+     timeout_seconds: 600
+   });
+   ```
+
+6. **Collect** into `work/outputs/<project>/<YYYY-MM-DD>/<prompt_id>/` with `fetch_outputs`; if the
+   local job state lags, download the `outputs[0]` URL directly. Keep the remote filename.
+7. **Verify and log.** Check non-zero size, append the run to `work/logs/run-log.md`, and only then
+   use vision (if needed) on your own file.
+8. **Building or adapting a workflow?** Follow
+   [`workflow-development/SKILL.md`](workflow-development/SKILL.md) from inspection through promotion.
+   The shipped tree is read-only; edits belong in `work/scratch/`.
+
+## Choose a workflow
+
+| Task | Model | Workflow | Notes |
+| - | - | - | - |
+| Photoreal text → image | Krea 2 Turbo | `workflows/text2image-krea.json` | 14-step portrait model; no LoRA; 1024×1280 |
+| Identity-preserving image edit | Krea 2 Edit | `workflows/image2image-krea-edit.json` | reference image + instruction; edit conditioning |
+| Stylized or detailed text → image | Flux.2 Klein 9B | `workflows/text2image-fluxklein.json` | 4-step RES4LYF; no custom LoRAs after sanitization |
+| Reference-based Flux edit | Flux.2 Klein 9B | `workflows/image2image-fluxklein.json` + `-2ref/-3ref/-4ref` | keeps source pose/size; 1–4 ordered references; ref 1 sets the canvas |
+| Fast photoreal still or keyframe | MOSS-Image | `workflows/text2image-moss.json` | 8-step DMD; 3:2 2 MP (1776×1184); optional prompt upsampler |
+| Song from style + lyrics | YuE2 3B | `workflows/text2music-yue2.json` | full-song model with vocals; 120 s |
+| Song from caption + lyrics | MiniMax Music 3 | `workflows/text2music-minimaxmusic3.json` | caption-driven; tiled audio decode |
+| Video from text or references | MiniMax H3 / Pika H3 Flex | `workflows/minimaxh3/api/pika-h3-*.api.json` + fastvideo variants | Pika 6-step default; fastvideo 8-step variants; 3 Pika + 14 fastvideo + 3 charreplace |
+| Video with joint audio | LTX-2.5 22B distilled | `workflows/ltx/api/*.api.json` | t2v/ref2v/i2v; 512×960; 8.04 s |
+| Multi-reference image edit | P-H3-Image | `workflows/ph3-image/ph3-image-edit-{4,5}img*.json` | 4 MP; up to 9 refs; native w4a8 |
+| 16 MP text → image | MiniMax-H3-Image | `workflows/h3-image/h3-image-t2i-{4mp,16mp}.api.json` | 6-step CFG 1; 4096² native; exact multi-line text |
+| Reference edit (H3-Image) | MiniMax-H3-Image | `workflows/h3-image/h3-image-edit{,-2ref,-4ref}.api.json` | 1/2/4 refs; object replacement; local attribute changes |
+| Video 2× upscale | RelayVSR X2 | `workflows/relayvsr/api/video-upscale-relayvsr-x2.api.json` | pixel-space 2×; audio passthrough |
+| Video 4× upscale | ReCaVSR X4 | `workflows/recavsr/api/video-upscale-recavsr-x4.api.json` | one-step streaming; 4× trained; audio and fps preserved |
+| Video recast / edit | Viggle Remake | `workflows/viggle-remake/api/viggle-remake-{swap,edit}.api.json` | H3 LoRA pair; 1–4 painted refs; 480p; audio carried |
+| 2K upscale / refine | MiniMax H3 + refiner | `workflows/minimaxh3/api/upscale-*.api.json` | t2v/v2v latent upscale; 2-step re-synthesis or 3-step IC fidelity; 2560×1440 |
+| Seamless video loop | MiniMax H3 Perfect Loop | `workflows/minimaxh3/api/perfect-loop-minimax-h3.api.json` | 154 f / 6.42 s; audio included; ×2 seam check |
+| Image or video matte | SAM3 (native) | `workflows/sam3/api/*.api.json` | text-prompted luma matte; image, video, tracker |
+| Speech or voice clone | Fish Audio Drama 3 | `workflows/fishdrama3/*.json` | 1–2 speaker TTS; four canonical variants |
+
+### Prompt writing
+
+Before filling a prompt, caption, lyrics, or script field, read the matching prompt-writer skill. A
+short caption is not equivalent to a production prompt; Music 3 in particular needs the structured
+caption/lyrics form to produce arrangement rather than a static groove.
+
+| Family | Prompt-writing skill |
+| - | - |
+| Krea 2 | `prompt-writing/krea2-prompt-writer/SKILL.md` |
+| Flux.2 Klein 9B | `prompt-writing/flux-klein-9b-prompt-writer/SKILL.md` |
+| MOSS-Image | `prompt-writing/moss-image-prompt-writer/SKILL.md` |
+| MiniMax-H3-Image | `prompt-writing/minimax-h3-image-prompt-writer/SKILL.md` |
+| LTX-2.5 | `prompt-writing/ltx2.5-prompt-writer/SKILL.md` |
+| YuE2 3B | `prompt-writing/yue2-prompt-writer/SKILL.md` |
+| MiniMax Music 3 | `prompt-writing/minimax-music3-prompt-writer/SKILL.md` |
+| Fish Audio Drama 3 | `prompt-writing/fish-audio-drama3-prompt-writer/SKILL.md` |
+
+The index is [`prompt-writing/README.md`](prompt-writing/README.md). The prompt writer chooses
+words and structure only; the workflow JSON remains the authority on model, steps, and save prefix.
+
+How to use the table:
+
+1. Resolve the listed repository-relative path against the repository root and pass the resulting absolute path
+   as `workflow_path`.
+2. For MiniMax H3, prefer the `api/*.api.json` mirror; image and audio workflows are converted
+   client-side from the UI files.
+3. Stage `LoadImage`/`LoadAudio` inputs in each target's `input/` first.
+4. Save outputs under `work/outputs/<project>/<date>/<prompt_id>/`; verify by metadata/file size.
+5. Vision is allowed only on your own inputs/outputs.
+
+Routing constraints:
+
+- One job at a time per target. Krea/Flux/MOSS/H3-Image are light per image; Music 3, MiniMax H3,
+  the 2K upscale path, the perfect loop, LTX-2.5, RelayVSR, ReCaVSR, and Viggle Remake are heavy;
+  Drama 3 is heavy on system RAM. H3-Image still pays the 27 GB text-encoder swap on the first run of a
+  process.
+- The workflow JSON is the final authority on node IDs and model filenames. The family sections call
+  out known traps: dead branches, decoy LoRA loaders, optional files that are not installed.
+- To build or adapt a graph, use [`workflow-development/SKILL.md`](workflow-development/SKILL.md).
+
+## Working directory
+
+All persistent files an agent creates go under **`work/`**. It lives inside the repository, so the
+repository stays self-contained and the workflow tree stays untouched. Transient one-off scripts may use a system
+temp directory, but anything the user may need belongs in `work/`.
+
+```text
+work/
+├── README.md          # pointer to this skill
+├── inbox/             # assets handed over by the user (read-only for agents)
+├── scratch/           # modified workflow/API copies (JSON allowed here)
+├── uploads/           # assets staged with the exact remote input/ filename
+├── outputs/           # downloaded ComfyUI results
+├── analysis/          # ASR/librosa scripts, transcripts, reports
+├── post/              # edits, grades, muxes, intermediates
+├── exports/           # final deliverables for the user
+└── logs/              # run-log.md and prompt/job records
+```
+
+| Artifact | Destination (relative to `work/`) |
+| - | - |
+| User-provided assets | `inbox/<project-slug>/` |
+| Asset to upload to ComfyUI | `uploads/<project-slug>/` |
+| Modified workflow or API JSON | `scratch/<project-slug>/` |
+| Downloaded ComfyUI output | `outputs/<project-slug>/<YYYY-MM-DD>/<prompt_id>/` |
+| ASR/librosa scripts and reports | `analysis/<project-slug>/` |
+| Edits, grades, muxes, intermediates | `post/<project-slug>/` |
+| Final deliverable | `exports/<project-slug>/` |
+| Run log, prompt IDs, byte sizes | `logs/run-log.md` |
+
+Rules:
+
+- **If `work/` lacks a subdirectory, create it.** Never create working folders elsewhere in the repository.
+- **Unsure where a file belongs?** Put it under `work/<project-slug>/`, never in `workflows/`.
+- **Organize by project slug:** `work/<area>/<project-slug>/...`. Use kebab-case and reuse the same
+  slug across areas (`inbox/my-song`, `outputs/my-song/...`).
+- **`inbox/` is read-only for agents.** Copy assets to `uploads/` or `scratch/`.
+- **`uploads/` uses the exact filename the workflow expects.** `upload_file` keeps the local name
+  **only if the target's `input/` does not already have a file by that name**; otherwise it writes
+  `name (1).ext` and returns the real name as `cloud_name`. The graph loads the literal string in the
+  JSON, so check `cloud_name` and either patch the scratch copy to it or upload under a
+  collision-free name. Stage assets once and upload the same set to every target that may run the
+  workflow.
+- **`scratch/` is the only place for modified workflow JSON.** Name it `<workflow-stem>__<variant>.json`.
+- **`outputs/` preserves the remote filename and adds date + prompt ID:**
+  `outputs/<project>/<YYYY-MM-DD>/<prompt_id>/<original-name>`. The `prompt_id` folder is the
+  provenance anchor for vision.
+- **Record the `prompt_id` before downloading.** Append the run to `logs/run-log.md`, then
+  `fetch_outputs` into the matching folder. If the folder and log entry do not exist, the file is not
+  yours for vision purposes.
+- **Record input provenance** in the run-log Notes: each staged input and its source (user-provided,
+  inbox, or generated by this run).
+- **`analysis/` holds scripts and reports, not media masters.** `post/` is working space; `exports/`
+  is only for files the user will use.
+- **`logs/run-log.md` is append-only.** Log every run with the template below; keep prompt IDs and byte
+  sizes as the run's proof.
+
+Run-log template:
+
+| Date | Project | Workflow | Server | prompt_id | Status | Output | Bytes | Notes |
+| - | - | - | - | - | - | - | - | - |
+
+## Workflows
+
+> **Release status.** Every workflow was sanitized for the public release: non-turbo LoRAs were
+> stripped and baked-in prompts were replaced with fox-themed demo prompts. All UI files were
+> conversion-validated against a reference target. On 2026-11-10 these API graphs were executed
+> end-to-end on the three reference 4090 targets: `ltx2-5-{t2v,i2v,ref2v}`,
+> `sam3-mask-{image,video}`, `text2video-minimax-t2v`, and `charreplace-keepbg`. Every other graph is
+> still conversion-validated only. Statuses below describe the pre-sanitization configuration and are
+> historical; run one job of your own before relying on a workflow.
+
+Each section gives the effective stack, the settings that matter, and the traps that have already
+cost runs. Node IDs refer to the shipped graphs.
+
+### Krea 2 — photoreal images and identity edits
+
+Krea 2 is the photoreal/character image family. Turbo produces a still from a prompt; Edit re-renders
+a supplied subject into a new scene, pose, or camera angle while preserving identity.
+
+**Prompt writing:** use [`prompt-writing/krea2-prompt-writer/SKILL.md`](prompt-writing/krea2-prompt-writer/SKILL.md).
+
+| File | Use | Key behavior |
+| - | - | - |
+| `workflows/text2image-krea.json` | text → image | 1024×1280; 14 steps; cfg 1; euler/simple; no LoRA |
+| `workflows/image2image-krea-edit.json` | image → image | same settings + `Krea2EditModelPatch`; reference image required; identity LoRA removed from the public template |
+
+**Stack:** `krea\kroma-v0.3.1-turbo-opd.safetensors` UNET, `qwen3vl_4b_fp8_scaled.safetensors`
+text encoder (type `krea2`), `wan\Wan2_1_VAE_bf16.safetensors` VAE.
+
+**Use it when** the deliverable is a photoreal portrait/character image, or you have one master
+reference and need wide/medium/close/detail variants that keep the same person. **Don't use it for**
+general graphic design, text-heavy images, or video.
+
+**Inputs:** prompt (`Text Multiline #72`), width `#74`, height `#73`, seed `#75`; the edit also needs
+`LoadImage #3071`. **Output:** PNG via `SaveImage`, prefix `COMFY_WORKFLOWS/KREA` or `KREA_EDIT`.
+**Status:** both verified.
+
+Effective settings and gotchas:
+
+- Both files: **1024×1280 (portrait)**, 14 steps, cfg 1, `euler`/`simple`, denoise 1, seed
+  `436220320311816` (`Seed #75` overrides the KSampler widget). The T2I converted prompt has 15 nodes;
+  the edit has 19.
+- **T2I:** no reference image, **no active LoRA** (all slots in #3065 are empty).
+- **Edit:** the identity LoRA `krea\krea2_identity_edit_v1_2.safetensors` was removed for the public
+  release; add it in a scratch copy if identity drift is unacceptable. Active custom nodes:
+  `Krea2EditModelPatch #3063`, `Krea2EditGroundedEncode #3066`, `ConditioningKrea2Rebalance #3055`
+  (ref_boost 1, fit mode).
+- The subgraph's inner `UNETLoader` and `CLIPLoader` now name the same models as the instance
+  (`krea\kroma-v0.3.1-turbo-opd.safetensors` and `qwen3vl_4b_fp8_scaled.safetensors`); the graph is
+  self-consistent and has no dead `krea2_turbo_fp8` reference.
+- Output size comes from `PrimitiveInt #74` / `#73`, not from the subgraph `EmptyLatentImage` widget.
+  Change both primitives together; 768×1344 gives 9:16.
+- Prompts must be explicitly photorealistic: “cinematic photograph, 35mm, natural skin texture, no
+  illustration, no 3D render.” “Stylized 3D animated” produces a cartoon look.
+- Keep the save prefix static. `%date:...%` tokens are passed through literally and `SaveImage` fails
+  with `WinError 123`.
+- The edit workflow is the preferred way to derive wide/medium/close/low/detail keyframes from one
+  master reference; it preserves identity and background better than independent T2I generations.
+
+### Flux.2 Klein 9B — fast, stylized/detailed images
+
+A distilled Flux.2 Klein model run through the RES4LYF 4-step sampler. It offers a more stylized,
+detail-oriented alternative to Krea. The public template ships with no custom LoRAs; the original
+production graph used four for realism, anatomy, and skin/detail control. The I2I graph injects a reference latent and follows the source image's dimensions.
+
+**Prompt writing:** use [`prompt-writing/flux-klein-9b-prompt-writer/SKILL.md`](prompt-writing/flux-klein-9b-prompt-writer/SKILL.md).
+
+| File | Use | Key behavior |
+| - | - | - |
+| `workflows/text2image-fluxklein.json` | text → image | 1024×1280; 4 steps; cfg 1; SharkSampler |
+| `workflows/image2image-fluxklein.json` | image → image | source-size output; 1 reference latent; same edit stack |
+| `workflows/image2image-fluxklein-2ref.json` | 2 images → image | two ordered references; 2 encodes, 4 ReferenceLatent; 34 nodes |
+| `workflows/image2image-fluxklein-3ref.json` | 3 images → image | three ordered references; 3 encodes, 6 ReferenceLatent; 39 nodes |
+| `workflows/image2image-fluxklein-4ref.json` | 4 images → image | four ordered references; 4 encodes, 8 ReferenceLatent; 44 nodes |
+
+**Stack:** `flux\flux-2-klein-9b-fp8.safetensors` UNET, `qwen_3_8b_fp8mixed.safetensors`
+via `CLIPLoader` (type `flux2`), `flux2-vae.safetensors` VAE. Custom packs: `RES4LYF`,
+`rgthree-comfy`, `was-node-suite-comfyui`, `comfyui-easy-use`, `comfyui-various`.
+
+**Use it when** you want a faster 4-step image with a different aesthetic, a reference-driven edit
+whose canvas should match the source, or a 2–4 reference composite. **Don't use it for** video or
+audio.
+
+All five files use the subgraph **Image Edit (Flux.2 Klein 9B)**. In the T2I file the subgraph's
+`reference_image1` input is unconnected, so it runs as text-to-image. In the I2I file,
+`LoadImage #710` feeds both the reference conditioning and `GetImageSize`. The multi-ref files add
+`LoadImage #711`–`#713`, one `ImageScaleToTotalPixels` + `VAEEncode` + `ReferenceLatent` chain each,
+and still read the canvas from `#710`; extra references never change output size.
+
+Inputs:
+
+- T2I: `Text Multiline #640` (prompt), `PrimitiveInt #2491` (width, default **1024**),
+  `PrimitiveInt #2490` (height, default **1280**), `easy seed #601` (see the seed warning).
+- I2I: `LoadImage #710`, `Text Multiline #640`, `easy seed #601`. Output size comes from the source
+  image, not from the width/height nodes.
+- Multi-ref (2/3/4): `LoadImage #710`–`#713`, `Text Multiline #640`, `easy seed #601`. **Every image
+  slot must be set** (all default to `example.png`), and the model receives a flat ordered list with
+  no per-reference tags — describe subjects by content (“the woman”, “the coat”), never “reference 2”.
+- Save: `COMFY_WORKFLOWS/KLEIN` (T2I), `COMFY_WORKFLOWS/KLEIN_EDIT` (I2I), and
+  `COMFY_WORKFLOWS/KLEIN_EDIT_{2,3,4}REF` (multi-ref).
+
+Active sampler path and traps:
+
+- The graph contains a standard `SamplerCustomAdvanced` branch and a RES4LYF branch. **The active path
+  is the RES4LYF branch:** `ClownSampler_Beta #2484` (`fully_implicit/lobatto_iiib_3s`, eta 0.5,
+  bongmath false) → `SharkSampler_Beta #2487` (4 steps, cfg 1, `simple` scheduler, `steps_to_run=-1`,
+  `denoise=1`, `sampler_mode=standard`) → `VAEDecode #410` → `SaveImage`.
+- The standard branch (`RandomNoise #411` → `SamplerCustomAdvanced #409` from `KSamplerSelect #408`,
+  `Flux2Scheduler #418`, `CFGGuider #423`) is **not connected to the output**. Changes there do not
+  affect the image.
+- **Seed warning:** the top-level `easy seed #601` feeds only `RandomNoise #411` on the unused branch.
+  The effective seed is the **SharkSampler `seed` widget**: `528424363836102` in T2I and
+  `751621384051185` in I2I. Change that value; changing the easy seed alone does nothing.
+- The subgraph has two Power Lora Loaders: **#2489** on the active path and **#424** on the dead
+  `CFGGuider` branch. Both were emptied for the public release and now pass MODEL/CLIP through. The
+  original production graph loaded four realism/anatomy LoRAs in #2489 (and seven different ones in
+  the #424 decoy); add your own to #2489 in a scratch copy if needed.
+- `SharkOptions_Beta #2486` uses `noise_type_init=brownian`, `s_noise_init=1`, `denoise_alt=1`, and
+  `channelwise_cfg=true`.
+- T2I: **1024×1280 (portrait)**, 4 steps, cfg 1. Positive prompt from the top-level text node;
+  negative prompt empty. Converted prompt has 25 nodes.
+- I2I: canvas follows the source dimensions (`GetImageSize` → subgraph width/height). The reference is
+  resized to about 1 MP (`ImageScaleToTotalPixels`, nearest-exact) and injected through
+  `ReferenceLatent` for positive and negative conditioning. Converted prompt has 29 nodes.
+- Multi-ref: 2/3/4 references convert to 34/39/44 nodes, with 2/3/4 encodes and 4/6/8
+  `ReferenceLatent`; the chains are pos→pos and neg→neg. The last chain feeds both the active
+  `SharkSampler_Beta` and the dead-branch `CFGGuider`. Models, sampler, sigmas, seed, and LoRAs are
+  unchanged from the 1-ref edit.
+- The reference latent dominates scene geometry: a prompt asking for a new surface may only relight
+  the existing one. Do not treat this workflow as segmentation/compositing.
+- The subgraph is named “Image Edit” even in the T2I file; that is expected.
+- Keep `SaveImage` prefixes static; no `%date:...%` tokens.
+
+### MOSS-Image — fast photoreal stills and keyframes
+
+MOSS-Image is an 8-step photoreal model paired with a Qwen3.5 text encoder. The generation graph is one
+subgraph instance: prompt, resolution, and seed come from top-level nodes, while the sampler, models,
+and optional branches are set on the instance. A built-in prompt upsampler can turn a short idea into a
+detailed caption.
+
+**Prompt writing:** use [`prompt-writing/moss-image-prompt-writer/SKILL.md`](prompt-writing/moss-image-prompt-writer/SKILL.md).
+
+**File:** `workflows/text2image-moss.json`. **Output:** PNG, prefix `COMFY_WORKFLOWS/MOSS`.
+
+**Use it when** you want a fast photoreal still or a video keyframe. **Don't use it for** motion:
+generate the still here and feed it to MiniMax H3 as `picture_1` or the first-frame guide.
+
+**Main trap:** the subgraph instance overrides the inner KSampler, seed, size, and loaders. Editing the
+inner nodes does nothing. Change `#18` (steps/cfg/sampler/scheduler/negative/models),
+`ResolutionSelector #19` (size), and `SeedNode #3072` (seed).
+
+Effective stack (the subgraph instance overrides the inner loaders):
+
+| Item | Effective value |
+| - | - |
+| UNET | `moss\kromoss_int8_convrot.safetensors` |
+| Text encoder | `qwen3.5_9b_int8_convrot.safetensors` (type `moss_image`) |
+| VAE | `flux2-vae.safetensors` (shared with Flux) |
+
+- The inner loader widgets still name `moss_image_sft_int8_convrot.safetensors`,
+  `qwen3.5_9b_w4a8_gptq.safetensors`, and `flux2-vae_small.safetensors`. Those are upstream defaults,
+  may not be installed, and are not used. Change the subgraph instance values, not the inner loaders.
+- Node packs: `was-node-suite-comfyui` (`Text Multiline`) and `rgthree-comfy`
+  (`Power Lora Loader`). Everything else is core: `TextGenerate`, `ResolutionSelector`, `SeedNode`,
+  `ComfySwitchNode`, `SkipLayerGuidanceDiTSimple`, `EmptyFlux2LatentImage`, `PreviewAny`.
+
+Inputs and effective settings:
+
+- Prompt: top-level `Text Multiline #3084` (`@prompt`); the inner `Text (User Prompt) #17` is overridden
+  by that link.
+- `ResolutionSelector #19`: `3:2 (Photo)`, 2 MP, multiple 8 → **1776×1184**. The instance width/height
+  widgets and the inner `EmptyFlux2LatentImage` are overridden.
+- Seed: `SeedNode #3072`, fixed `441725079545389` with `randomize`; the instance and inner KSampler
+  seeds are overridden.
+- Subgraph instance `#18`: 8 steps, cfg 2.5, `exp_heun_2_x0_sde`, `beta57`, denoise 1; negative
+  prompt `worst quality, bad anatomy, watermark, jpeg artifact`; SLG off; prompt upsampler off.
+- The inner `KSampler #7` widgets (25 steps, `er_sde`, `simple`) are dead; the instance values above
+  override them.
+- `enable_prompt_upsampler #16`: when on, `TextGenerate #11` rewrites the prompt through the same
+  Qwen3.5 encoder using system prompt `#14` (max 4096 tokens, temperature 0.7, top-k 64, top-p 0.95).
+  `PreviewAny #13` exposes the final caption as `text_outputs`; off by default. It adds a generation
+  pass and can drift from the request.
+- `SLG #24`: when on, `SkipLayerGuidanceDiTSimple #15` applies `single_layers="22"` from 0 to 0.5.
+- Keep the save prefix static; no `%date:...%` tokens.
+
+Active LoRA (sanitized):
+
+| LoRA | Strength |
+| - | - |
+| `moss\MOSS-Image-Base-8-steps-dmd.safetensors` | 1.0 |
+
+The DMD LoRA is the 8-step distillation/speed adapter and stays. The public graph strips the
+style/adult-oriented LoRAs; add your own in a scratch copy.
+
+**Status:** conversion-validated after sanitization (20 nodes). The pre-sanitization graph had completed
+runs at 1776×1184; re-run the sanitized graph before production.
+
+### YuE2 3B — full songs from style + lyrics
+
+Generates a complete song (vocals plus backing) from a style description and lyrics. It uses core
+`comfy_extras.nodes_yue2` nodes in a subgraph; ABC structural planning is off in the shipped file, so
+it generates directly from style + lyrics.
+
+**Prompt writing:** use [`prompt-writing/yue2-prompt-writer/SKILL.md`](prompt-writing/yue2-prompt-writer/SKILL.md).
+
+**File:** `workflows/text2music-yue2.json`. **Model:** `yue2_3b_int8_convrot.safetensors`
+(checkpoints). **Output:** FLAC, prefix `COMFY_WORKFLOWS/YUE2_T2M`.
+
+**Use it when** you have lyrics and a musical direction and want a sung track. **Don't use it for**
+speech/TTS or short stingers. Tracks can end before `max_duration`; verify duration and vocal presence
+with ASR/librosa, not the ABC notation.
+
+Inputs and effective settings:
+
+- Subgraph **Text to Music (YuE2)** inputs: `Style`, `Lyrics`, `mode`, `ABC_planning`, `max_duration`,
+  `seed`, `ckpt_name`. Top level exposes Style `#36`, Lyrics `#37`, and ABC `#31` as links; `mode`,
+  `max_duration`, `seed`, and `ckpt_name` are widget values on the subgraph node.
+- Defaults: `mode=full`, **`ABC_planning=false`**, `max_duration=120`, `seed=0` (fixed),
+  `ckpt_name=yue2_3b_int8_convrot.safetensors`. Converted prompt uses 16 nodes.
+- `ABC_planning` is an explicit boolean. `ComfySwitchNode` feeds an empty ABC string to
+  `YuE2GenerateMusic` when it is off, selecting direct generation; the switch is lazy.
+- KSampler: 32 steps, cfg 1, `dpm_2`, `sgm_uniform`, denoise 1. `SeedNode` feeds
+  `YuE2GenerateABC`, `YuE2GenerateMusic`, and the KSampler with the same seed.
+- `max_duration=120` flows to `YuE2GenerateMusic` and `EmptyYuE2LatentAudio`; the internal node widget
+  says 360, but the linked value is 120.
+- `YuE2GenerateABC` advanced defaults: `max_abc_tokens=8192`, temperature 0.7, top_p 0.9, top_k 30,
+  repetition_penalty 1.005, penalty_window 100.
+- `YuE2GenerateMusic` advanced defaults: temperature 1, top_p 0.95, top_k 100,
+  repetition_penalty 1.2, cfg_scale 1.0.
+
+Findings:
+
+- Yue2 can produce a full vocal track from a style prompt plus lyrics, but **ABC notation is not a
+  reliable indicator of vocal presence**: it has shown vocal rests on tracks that contain audible
+  vocals. Verify with ASR or ask the user to listen.
+- Tracks can end earlier than `max_duration`. Check the actual duration before planning an edit. If a
+  track is short, extend it with a bar-aligned loop or crossfade rather than time-stretching the whole
+  song.
+- `mode` options are `full` and `melody`; use `full` for songs.
+- `SaveAudioAdvanced` supports flac, mp3, and opus. Keep the save prefix static.
+- For ASR, load audio with librosa at 16 kHz and pass the NumPy array to faster-whisper. Passing the
+  FLAC path directly can fail in PyAV with an incompatible `metadata_errors` argument.
+- The old `text2audio-*` files are gone; do not recreate them. The workflow is a subgraph, not custom
+  nodes.
+
+### MiniMax Music 3 — caption-driven songs
+
+**File:** `workflows/text2music-minimaxmusic3.json`. This is **not** the `MiniMaxMusicNode` API
+integration; it runs the local MiniMax Music 3 model with core `comfy_extras.nodes_minimax_music`
+nodes.
+
+**Prompt writing:** use [`prompt-writing/minimax-music3-prompt-writer/SKILL.md`](prompt-writing/minimax-music3-prompt-writer/SKILL.md). A short caption produces a static groove; the prompt writer's structured caption/lyrics form is what gives the track arrangement and lift.
+
+Subgraph **Text to Music (MiniMax Music 3)** inputs: `caption`, `lyrics`, `max_duration`, `seed`,
+`unet_name`, `clip_name`, `vae_name`, `tiled_decode`.
+
+Models:
+
+- Diffusion: `minimax\minimax_music3_dit_fp16.safetensors` (4.58 GB; the workflow default). The int8
+  variant (2.33 GB) is documented upstream for low VRAM but is not assumed installed.
+- Text encoder: `minimax_music3_text_encoder_pruned_int8_convrot.safetensors` (8.57 GB).
+- VAE: `minimax\minimax_music3_dav.safetensors` (206.7 MB).
+
+Defaults and behavior:
+
+- `max_duration=120`; the model supports up to about 300 s. The node's hard maximum is 360.
+- 30 steps, cfg 1.7, `euler`, `simple`, denoise 1.
+- Seed: the subgraph instance value is `813991159612730`; the internal `SeedNode` is `randomize`. Fix
+  the seed to reproduce a song.
+- `tiled_decode=true` selects `VAEDecodeAudioTiled` (tile 1536, overlap 64). The switch is lazy, so
+  only the selected decoder runs. Tiled decode cuts VRAM; there is a small seam risk. Disable it only
+  when VRAM allows and you want maximum quality.
+- Save: `COMFY_WORKFLOWS/MINIMAXMUSIC3_T2M`, MP3 V0.
+- The `caption` and `lyrics` defaults are an example; replace them for new songs.
+- Converted prompt has 12 nodes.
+
+Findings:
+
+- Caption structure: Global Metadata → Vocal Details → Arrangement. Section tags
+  `[intro] [verse] [chorus] [bridge] [outro]` are the executable structural instructions; the lyric
+  text conveys mood.
+- Longer songs take more time and VRAM. Generate with headroom and trim in post.
+- This is a local model; it spends no credits and needs no API key.
+- A 120 s request has produced about 85 s of audio; duration is a target, not a guarantee. Check the
+  real duration before assuming a full two-minute track.
+
+### Fish Audio Drama 3 — TTS and voice cloning
+
+Local TTS with two speaker slots (autogrow to 16 in the UI). The base workflow is
+`workflows/fishdrama3/tts-fishdrama3-base.json`; four canonical variants live in `workflows/fishdrama3/` and should be
+preferred for normal runs. The base file is for custom rewiring.
+
+**Prompt writing:** use [`prompt-writing/fish-audio-drama3-prompt-writer/SKILL.md`](prompt-writing/fish-audio-drama3-prompt-writer/SKILL.md).
+
+**Stack:** `drama3_fp8experts_bf16.safetensors` (38.6 GB of experts in system RAM) plus
+`drama3_codec.safetensors`. Node pack: `ComfyUI-Drama3` (`PedroMarinhoDev/ComfyUI-Drama3`, pinned
+`8cb3c64379d4988b9693cae9f3436b8fd54b22ad`). Drama 3 is heavy; prefer a target with ample system RAM —
+64 GB is tight, 128 GB+ is safer.
+
+**Use it when** you need dialogue, narration, or a consistent character voice. **Don't use it for**
+singing; use YuE2 or Music 3. The reference transcript must match the clip word for word.
+
+Variants:
+
+| Use | File | Voice slots | `speakers` | Save prefix |
+| - | - | - | - | - |
+| Single speaker, no reference | `workflows/fishdrama3/tts-fishdrama3__single-speaker-no-reference.json` | none | `one take per speaker` | `COMFY_WORKFLOWS/FISHDRAMA3_TTS_SOLO_NOREF` |
+| Single speaker, clone | `workflows/fishdrama3/tts-fishdrama3__single-speaker-clone.json` | `voice0` | `one take per line` | `COMFY_WORKFLOWS/FISHDRAMA3_TTS_SOLO_CLONE` |
+| Dual speaker, clone | `workflows/fishdrama3/tts-fishdrama3__dual-speaker-clone.json` | `voice0` + `voice1` | `one take per line` | `COMFY_WORKFLOWS/FISHDRAMA3_TTS_DUAL_CLONE` |
+| Dual speaker, clone + no-reference speaker | `workflows/fishdrama3/tts-fishdrama3__dual-speaker-clone-plus-no-reference.json` | `voice0`; empty `voice1` | `one take per speaker` | `COMFY_WORKFLOWS/FISHDRAMA3_TTS_DUAL_CLONE_NOREF` |
+
+The base file ships two clone chains; the embedded Markdown note describes the no-voice mode. Use the
+variants above for normal runs.
+
+Shared graph:
+
+| Node | Role | Default |
+| - | - | - |
+| `#2 Drama3Loader` | model | `drama3_fp8experts_bf16.safetensors`, experts in RAM, cache 0, no second GPU |
+| `#3 Drama3CodecLoader` | codec | `drama3_codec.safetensors` |
+| `#4 Drama3Generate` | text, voices, sampling | 2 voice slots; text uses speakers 0 and 1; seed `808537437152901`, randomize; temperature 1.0, top_p 0.9, top_k 0, max_frames 600, split_long_text true, speakers `one take per line` |
+| `#5 Drama3Decode` | decode | `shorten_long_pauses=true` |
+| `#6 SaveAudio` | output | `COMFY_WORKFLOWS/FISHDRAMA3_TTS`, FLAC |
+| `#9 LoadAudio` → `#8 Drama3EncodeVoice` | clone voice 0 | sample clip + transcript |
+| `#11 LoadAudio` → `#10 Drama3EncodeVoice` | clone voice 1 | sample clip + transcript |
+
+Voice mapping and transcripts:
+
+- `voices.voice0` is speaker 0 and `voices.voice1` is speaker 1. A leading `<|speaker:N|>` tag in an
+  `EncodeVoice` transcript overrides the slot; remove leading speaker tags from reference transcripts.
+- The shipped transcripts may be elided with `...`; replace them with the full exact transcript for a
+  good clone.
+- Sample reference clips may exist in some targets' `input/`. Never rely on them: stage your own clips
+  in `work/uploads/` and upload them to every target that may run the configuration.
+
+Configuration matrix (styles of run):
+
+| Use | Clone chains kept | Voice inputs on `#4` | Text tags | Result |
+| - | - | - | - | - |
+| Single speaker, no reference | none | none | speaker 0 only | Invented voice, different per seed |
+| Single speaker, clone | `#9→#8` | `voice0` | speaker 0 only | Cloned voice |
+| Dual speaker, clone | `#9→#8` and `#11→#10` | `voice0` + `voice1` | speakers 0 and 1 | Two cloned voices |
+| Dual speaker, clone + no-reference speaker | one chain | one slot | speakers 0 and 1 | One cloned, one invented per seed |
+
+Reproducing a mode from the base file:
+
+1. **Single speaker, no reference:** bypass (`Ctrl+B`) or mute (`Ctrl+M`) `#8`, `#9`, `#10`, `#11`;
+   leave both voice slots unconnected; tag every line speaker 0; use `one take per speaker` for one
+   consistent invented voice. This is the least stable mode: if a take falls silent, requeue with a new
+   seed. Use it for background voices or scratch lines, not a recurring character.
+2. **Single speaker, clone:** keep `#9 → #8` and connect `#8` to `voices.voice0`; bypass `#10`/`#11`;
+   upload the reference clip to every target, set `#9` to that filename, and set `#8`'s transcript to
+   the exact words. Use clean single-speaker speech with no music or overlapping voices.
+3. **Dual speaker, clone:** keep all four nodes and connect both chains; set both clips and
+   transcripts; write alternating speaker-0/1 lines; keep `one take per line` to prevent voice bleed.
+   `one take per line, hearing the line before` adds reactions but can bleed; `one take per speaker`
+   groups each speaker's lines; `together` is one script with full bleed.
+4. **Dual speaker, clone + no-reference speaker:** keep one clone chain, bypass the other, leave its
+   slot unconnected; write both speakers' lines; use `one take per speaker` so the invented speaker's
+   lines share one take. Lock the seed once the invented voice is acceptable; if it falls silent,
+   requeue with a new seed (a short first line helps). To flip which speaker is cloned, move the chain
+   to `voice1`.
+
+Shared rules and pitfalls:
+
+- **Do not save the file after re-wiring.** Bypass or mute instead of deleting so the shipped topology
+  is easy to restore; close without saving if you must delete.
+- `Drama3Generate` uses autogrow `voices` (up to 16). The file ships two. For three or more speakers,
+  grow the input in the UI at runtime; do not add a JSON.
+- `max_frames=600` is about 28 seconds per text chunk (21.5 frames per second). `split_long_text=true`
+  splits long text into about 300-byte chunks.
+- Keep `top_k=0` (no cap), `temperature=1.0`, `top_p=0.9`. Lower `top_k` values stall more often.
+- `shorten_long_pauses=true` trims pauses longer than 0.75 s, cuts leading silence, and keeps 0.15 s
+  after the last sound. Disable it only if you need raw timing.
+- Keep the save prefix static. `SaveAudio` auto-increments and writes FLAC; ComfyUI may report the node
+  as deprecated in converted prompts, but it converts and runs.
+- Keep `experts=in RAM` on 24 GB cards. `in VRAM` needs the whole 38.6 GB file in VRAM or two GPUs.
+- Drama3 is heavy: first run loads the file; expect roughly 20–25 ms per frame on a 3090/4090 (real
+  time is 46 ms per frame). One job per target.
+- Verify with ASR (words and speaker turns) and librosa (duration/silence); do not visually inspect
+  audio media.
+
+### MiniMax H3 — video with generated audio and optional references
+
+**Pika H3 Flex is the default generation path.** Three API-first graphs — `pika-h3-t2v`, `pika-h3-fl2va`,
+and `pika-h3-ref2va` — use the official 6-step LCM contract, 24 fps, and stronger text/signage/edge/
+reference quality. See [`minimaxh3-pika/SKILL.md`](minimaxh3-pika/SKILL.md).
+
+The older fastvideo family ships 14 pre-wired UI variants plus API mirrors, all using the fastvideo
+model, v1.2 turbo LoRA, 8-step beta sampling, and RIFE to 48 fps. Use those for fast generation; use Pika
+for finals and for any 768P draft that will be refined to 2K or fed to the IC refiner. Two `*-forced`
+fastvideo variants add the forced-audio latent chain for
+driving the mouth from a supplied track. Three API-first `charreplace-*` workflows replace the
+performer in a source video with a different character.
+
+**Use it when** you need a short performance/b-roll clip, especially with a character reference or a
+previous clip for continuity. **Don't use it for** long-form video or silent clips (every variant
+carries an audio stream). Plain audio references condition voice and energy, not phonemes; use the
+`*-forced` variants or the character-replacement workflows when the supplied track must drive the
+mouth.
+
+**Inputs:** prompt, 1–2 pictures, 0–1 video, 0–1 audio, seed; Pika exposes width/height/length
+directly, fastvideo takes resolution/aspect and length from the settings subgraph. **Output:** h264
+MP4 with audio; Pika 24 fps, fastvideo 48 fps after RIFE.
+
+#### Base template
+
+`workflows/minimaxh3/text2video-minimax-base.json` is the 97-node control surface behind the variants. Its default
+resolution resolves to the T2V path, but every reference slot and optional branch is present. Use a
+`workflows/minimaxh3/` variant for a ready run; use the base only for a slot the variants do not expose.
+
+Subgraphs: `@settings`, `#1` (sampler), `2nd Pass`, `Load Models & Patches`.
+
+| Slot | Node | Default |
+| - | - | - |
+| prompt | `PrimitiveStringMultiline #22:11` | fox-themed demo prompt |
+| picture_1..6 | `LoadImage #284, #285, #286, #287, #324, #289` | `example.png`, bypassed |
+| video_1, video_2 | `LoadVideo #293, #295` → `GetVideoComponents` | `example.mp4`, bypassed |
+| video_guide | `VHS_LoadVideo #321` | `example.mp4`, 24 fps cap 22, bypassed |
+| audio_1..3 | `LoadAudio #290, #291, #292` | `example.wav`, bypassed |
+| first frame | `MiniMaxH3AddGuide #272` (`frame_idx=0`) | bypassed |
+| last frame | `MiniMaxH3AddGuide #279` (`frame_idx=-1`) | bypassed |
+| 2nd-pass upscale | `MinimaxH3LatentUpscaler3D #243` | bypassed; model may be absent |
+
+The optional 2nd-pass branch also references `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` and
+`minimax_h3_video_vae_int8_convrot.safetensors`; both may be absent. The default path does not use
+them. Do not enable those branches without installing the files.
+
+#### Shared stack and settings (all variants)
+
+| Item | Value |
+| - | - |
+| UNET | `minimax\minimax_h3_fastvideo_vsa_datafree_1300step_4step_int8_convrot.safetensors` |
+| Text encoder | `qwen3vl_32b_minimax_h3_int8_convrot.safetensors` (type `minimax`) |
+| Video VAE | `minimax\minimax_h3_video_vae_fp16.safetensors` |
+| Audio VAE | `minimax\minimax_h3_audio_vae_fp32.safetensors` |
+| Resolution | `ResolutionSelector`: 9:16, 0.3 MP, multiple 32 (≈416×736) |
+| Length | 8 s (192 frames at 24 fps; the `length` node rounds up to a 17-frame grid) |
+| Sampling | 8 steps: `22:8` `INTConstant` (TOTAL STEPS) → `22:7` `BasicScheduler` (beta), `er_sde` sampler, cfg 1 |
+| Sigma shift | video 6, audio 3 (`MiniMaxH3SigmaShift`) |
+| Seed | `easy seed` = `557826801843623` |
+| References | `ref_image_size=max`; first picture is `ref_image_0` |
+| RIFE | `FL_RIFE` `rife47`, multiplier 2 → 48 fps output |
+| Output | `VHS_VideoCombine`, h264/mp4, yuv420p, crf 16, with audio |
+
+Active LoRA (identical in every UI variant and API mirror):
+
+| LoRA | Strength |
+| - | - |
+| `minimax\minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors` | 0.8 |
+
+The stack is intentionally reduced to the speed/turbo LoRA: no character or style LoRAs ship
+with this suite. The `Power Lora Loader #21` keeps one slot; a bypassed `LoraLoaderModelOnly` node
+holds the same turbo LoRA for reference. Add your own LoRAs in a scratch copy, never in the shipped
+templates. Verify the model and LoRA on each target with the loader's `/object_info/<Class>` option
+list before a run; `/models/<folder>` can be empty even when the file is installed.
+
+#### Variants and UI/API differences
+
+The 12 base UI variants keep the full 97-node graph with unused reference branches bypassed; the two
+forced-audio files are 78-node derivatives. The 14 family API mirrors are pre-slimmed (33–40 nodes)
+with the same models, LoRAs, refs, settings, seed, and save prefix; they contain no
+`Fast Groups Bypasser`/`Label` nodes and are the preferred MCP execution files. The three
+`charreplace-*` API workflows are separate 46–49 node graphs with the SAM3/mask motion-guide chain.
+
+| Variant | UI file | API file | Refs (P/V/A) | Save prefix | Historical status |
+| - | - | - | - | - | - |
+| `t2v` | `workflows/minimaxh3/text2video-minimax-t2v.json` | `workflows/minimaxh3/api/text2video-minimax-t2v.api.json` | 0 / 0 / 0 | `MINIMAX_T2V` | verified |
+| `1p` | `workflows/minimaxh3/ref2video-minimax-1p.json` | `workflows/minimaxh3/api/ref2video-minimax-1p.api.json` | 1 / 0 / 0 | `MINIMAX_1P` | verified (production) |
+| `2p` | `workflows/minimaxh3/ref2video-minimax-2p.json` | `workflows/minimaxh3/api/ref2video-minimax-2p.api.json` | 2 / 0 / 0 | `MINIMAX_2P` | input-verified |
+| `1v` | `workflows/minimaxh3/ref2video-minimax-1v.json` | `workflows/minimaxh3/api/ref2video-minimax-1v.api.json` | 0 / 1 / 0 | `MINIMAX_1V` | input-verified |
+| `1p1v` | `workflows/minimaxh3/ref2video-minimax-1p1v.json` | `workflows/minimaxh3/api/ref2video-minimax-1p1v.api.json` | 1 / 1 / 0 | `MINIMAX_1P1V` | verified |
+| `1p1a` | `workflows/minimaxh3/ref2video-minimax-1p1a.json` | `workflows/minimaxh3/api/ref2video-minimax-1p1a.api.json` | 1 / 0 / 1 | `MINIMAX_1P1A` | verified (production) |
+| `1v1a` | `workflows/minimaxh3/ref2video-minimax-1v1a.json` | `workflows/minimaxh3/api/ref2video-minimax-1v1a.api.json` | 0 / 1 / 1 | `MINIMAX_1V1A` | generated |
+| `1p1v1a` | `workflows/minimaxh3/ref2video-minimax-1p1v1a.json` | `workflows/minimaxh3/api/ref2video-minimax-1p1v1a.api.json` | 1 / 1 / 1 | `MINIMAX_1P1V1A` | generated |
+| `2p1v` | `workflows/minimaxh3/ref2video-minimax-2p1v.json` | `workflows/minimaxh3/api/ref2video-minimax-2p1v.api.json` | 2 / 1 / 0 | `MINIMAX_2P1V` | generated |
+| `2p1a` | `workflows/minimaxh3/ref2video-minimax-2p1a.json` | `workflows/minimaxh3/api/ref2video-minimax-2p1a.api.json` | 2 / 0 / 1 | `MINIMAX_2P1A` | generated |
+| `2p1v1a` | `workflows/minimaxh3/ref2video-minimax-2p1v1a.json` | `workflows/minimaxh3/api/ref2video-minimax-2p1v1a.api.json` | 2 / 1 / 1 | `MINIMAX_2P1V1A` | generated |
+| `1p1a-yue2` | `workflows/minimaxh3/ref2video-minimax-1p1a-yue2.json` | `workflows/minimaxh3/api/ref2video-minimax-1p1a-yue2.api.json` | 1 / 0 / 1 (YuE2 FLAC) | `MINIMAX_1P1A_YUE2` | verified |
+| `1a-forced` | `workflows/minimaxh3/ref2video-minimax-1a-forced.json` | `workflows/minimaxh3/api/ref2video-minimax-1a-forced.api.json` | 0 / 0 / 1 (forced) | `MINIMAX_1A_FORCED` | verified (lip-sync) |
+| `1p1a-forced` | `workflows/minimaxh3/ref2video-minimax-1p1a-forced.json` | `workflows/minimaxh3/api/ref2video-minimax-1p1a-forced.api.json` | 1 / 0 / 1 (forced) | `MINIMAX_1P1A_FORCED` | verified (lip-sync) |
+
+**Character replacement (API-first):** `charreplace-keepbg` keeps the source background;
+`charreplace-charbg` uses the character image's background; `charreplace-refbg` takes a separate
+background image. They use SAM3 person segmentation, a depth-guided motion guide
+(`DepthAnythingTensorrt`, `depth_anything_v2_vitl-fp16.engine`), forced source audio, and RIFE. The
+optional `h3_character_swap_v1.5` LoRA was removed for the public release; add it in a scratch copy for
+stronger identity transfer. See `skills/minimaxh3-character-replace/SKILL.md` and the three
+`api/ref2video-minimax-charreplace-*.api.json` files. They are not UI/API pairs.
+
+**Draft stack for 2K/IC.** Use the Pika H3 Flex 6-step contract for a 768P draft that will be refined.
+The fastvideo 4-step preset is not a substitute: on the same prompt and seed it carried ~3× the
+Laplacian and ~1.6× the flicker of Pika even with its full LoRA stack, and ~7×/2× when stripped to the
+motion/dareties pair. See `skills/minimaxh3-pika/SKILL.md` and `skills/minimaxh3-upscale/SKILL.md`.
+
+For 2K upscale/refine, see `skills/minimaxh3-upscale/SKILL.md` and the four
+`workflows/minimaxh3/api/upscale-*.api.json` graphs. They are API-first and have no UI twins. The
+`upscale-minimax-2k-ic.api.json` graph is the fidelity path: it needs a decoded Pika 768P draft, feeds
+it as `<Video 1>` to the ref2va base, and muxes the draft audio without a VAE round trip. It uses LMS
+Sharp plus the 0.2 GB Kijai rank-21 IC LoRA — no HyperFlow and no alpha patch.
+
+For seamless text-to-video loops (154 frames / 6.42 s, with synchronized audio), see
+`skills/minimaxh3-perfect-loop/SKILL.md` and
+`workflows/minimaxh3/api/perfect-loop-minimax-h3.api.json`. It is API-first and has no UI twin.
+
+Reference placeholders: every image slot uses `example.png`, every video slot `example.mp4`, and every
+audio slot `example.wav`.
+
+Status meanings:
+
+- **verified:** a completed run with output bytes is recorded in the run log. “verified (production)”
+  means a real project run used the variant. “verified (lip-sync)” means a forced-audio variant passed
+  an audio-match test (≈0.965 mel correlation on a music/vocal segment).
+- **input-verified:** conversion and input wiring were checked, but no completed run is recorded.
+- **generated:** the variant was built and inspected; neither a run nor input wiring is recorded.
+- **template:** the base control surface, not a production run file.
+- **unverified:** no completed run is recorded for the current file.
+
+Run one job before production for any `generated` or `unverified` file.
+
+#### MiniMax H3 findings
+
+- **RIFE is mandatory.** Keep `FL_RIFE` and the 48 fps target active on every variant. Output is
+  48 fps.
+- **Resolution comes from the settings subgraph.** `Resolution Selector` uses the outer `megapixels`
+  value, not the loader widgets. `0.3` MP (default) = **416×736** for 9:16; `1.0` MP = **768×1376**
+  (multiple-of-32 rounding). For a 768×1344 master, crop 16 px top and bottom.
+- **Every variant carries an audio stream**, including `1p` and b-roll. Ignore or mute it in post and
+  use the master track.
+- **Fix the final switches.** `Final Images` and `Final Audio` must not select `any_01` from the
+  bypassed upscale path. Disconnect `any_01` so the active single-pass decoders are selected.
+  Otherwise RIFE receives a latent dict and fails with `'dict' object has no attribute 'shape'`.
+- **Strip UI-only nodes** from API graphs (`Fast Groups Bypasser`, `Label`).
+- **First-frame conditioning:** activate `ImageResizeKJv2`, `GetImageSize`, and `MiniMaxH3AddGuide`
+  with the keyframe in `LoadImage`. The API graph then carries a `MiniMaxH3AddGuide` node fed by the
+  keyframe and the model latent. This is a much stronger identity/location anchor than reference
+  images alone.
+- **Reference tags:** the R2V node presents references as `<Picture i>`, `<Video k>`, and `<Audio j>`
+  (1-based per type). Use those tags in the prompt to bind instructions to the right reference.
+- **`ref_image_size` is a quality/speed switch.** `max` uses the reference pipeline's 2048 px short
+  edge and can be several times slower; `match` scales to the generation's pixel area. Use `max` for
+  identity-critical shots and `match` for b-roll or iteration.
+- **Video-reference carry:** to keep style and lighting continuous, upload a previous clip as
+  `video_1` and use `ref_videos.ref_video_0`. Disconnect `ref_video_audios.ref_video_audio_0` so the
+  video contributes frames/style, not competing audio. Keep the character keyframe as `picture_1`.
+- **Audio reference is not a lip-sync driver.** `ref_audios.ref_audio_N` is standalone reference audio;
+  `ref_video_audios.ref_video_audio_N` is the soundtrack of a reference video. Both are encoded as
+  reference tokens that condition the model. MiniMax H3 generates its own audio and video latents, so
+  the mouth follows the generated audio, not the supplied clip. Replacing the generated audio with an
+  external track leaves the mouth synced to the old generated audio. Verify by extracting the clip
+  audio and comparing ASR or spectra with the reference.
+- **Forced audio latent (working lip-sync method).** Replace the generation's audio latent with the
+  target audio before sampling:
+  1. `MiniMaxH3ReferenceToVideo` LATENT (joint AV) → `LTXVSeparateAVLatent` → `video_latent`.
+  2. `LoadAudio` → `VAEEncodeAudio` with the **audio VAE** → `audio_latent`.
+  3. `SolidMask` value `0` (32×32) → `SetLatentNoiseMask` on the audio latent.
+  4. `LTXVConcatAVLatent(video_latent, masked_audio_latent)` → the sampler's `latent_image`.
+
+  The zero noise mask freezes the audio latent; the sampler generates video against the real audio.
+  The output audio matches the input and the mouth follows it. Keep `MiniMaxH3AddGuide` on the model's
+  original AV latent for first-frame conditioning; only the sampler's starting latent is replaced.
+  Apply it per performance shot with the exact segment; the concat node trims or zero-pads audio to
+  the video length. The `*-forced` variants implement this chain and passed a music/vocal lip-sync
+  test. They default to 1.0 MP (768×1376) and 8 s.
+- **Fixed seeds:** the `easy seed` node is fixed per shot. Reuse it when comparing variants; vary it
+  per shot for different motion.
+- **Length is a 24 fps frame count, not seconds.** `length` steps by 17 and the trained range is
+  roughly 124–362 frames (~5–15 s). RIFE doubles the result to 48 fps. Generate with headroom and trim
+  to the edit timeline; the returned duration can be quantized.
+- **Input slots:** the family uses stable filenames for pictures, video, and audio; the Yue variant
+  uses its own stable audio name. The variant table lists each variant's refs.
+
+### SAM3 — native detection and masking
+
+- `workflows/sam3/api/` has three API-first graphs: image matte, per-frame video matte, and the
+  `SAM3_VideoTrack` tracker. They are the right tool when you only need to cut something out; do not
+  rebuild a `charreplace-*` graph for a matte.
+- Native only: `SAM3_Detect`, `SAM3_VideoTrack`, and `SAM3_TrackToMask` resolve to
+  `comfy_extras.nodes_sam3`. No custom SAM3 pack is needed; the checkpoint is
+  `sam3.1_multiplex_fp16.safetensors`.
+- The whole surface is `10.image`/`10.video` plus `12.text`. The text is an open-vocabulary target
+  with a comma/`:N` grammar; an absent target falls back to the salient object, so a nearly-full matte
+  means the prompt is wrong. Check mean luma before using a matte.
+- `20.frame_rate` must match the source fps; the loader fps is not wired to the saver.
+- See `skills/sam3/SKILL.md` for prompt grammar, knobs, coverage check, alpha WebM, and gotchas.
+
+### LTX-2.5 — video with joint audio
+
+Three API-first graphs in `workflows/ltx/api/`: `ltx2-5-t2v`, `ltx2-5-ref2v`, and `ltx2-5-i2v`.
+LTX-2.5 22B distilled generates video and audio in one pass at 512×960, 193 frames / 8.04 s / 24 fps.
+The audio is model output, not a supplied track. Ref2v applies the `Best_FaceID_v1.0_LoRA` identity
+adapter at 1.0; it is absent from t2v/i2v.
+
+**Prompt writing:** use [`prompt-writing/ltx2.5-prompt-writer/SKILL.md`](prompt-writing/ltx2.5-prompt-writer/SKILL.md).
+The prompt drives the generated audio as well as the picture, so describe sound where it happens; do
+not write around a supplied track.
+
+- Stack: `ltx-2.5-22b-distilled-transformer-comfy-int8-convrot` + Gemma 4 12B (`CLIPLoader` type
+  `ltxv`), video/audio VAEs, `LTXIdentityOverlapConditioning` (BFSNodes), `LTXVImgToVideoInplace`.
+- Fixed seed `432312402084296`; change `easy seed`, not `RandomNoise`. First pass 8 steps
+  `euler_ancestral_cfg_pp` + `LTXVScheduler`; refiner 4 steps `euler_cfg_pp` with
+  `0.85, 0.7250, 0.4219, 0.0`; cfg 1.
+- `VHS_VideoCombine.frame_rate` must be 24; the source template's 8 would stretch 8 s of audio over
+  24 s. Frames must be `8n+1` (193 or 201).
+- 22B int8 + Gemma 12B does not fit 24 GB at once; keep `PathchSageAttentionKJ`,
+  `LTXVChunkFeedForward (2, 4096)`, and `LTX2AttentionTunerPatch`.
+- Save prefixes: `COMFY_WORKFLOWS/LTX/t2v`, `.../ref2v`, `.../i2v`.
+
+Full addresses, reference widgets, i2v semantics, model sources, and gotchas:
+[`ltx2-5/SKILL.md`](ltx2-5/SKILL.md).
+
+### RelayVSR X2 — 2× video super-resolution
+
+`workflows/relayvsr/` contains a four-node UI/API pair. RelayVSR is a one-step distilled pixel-space
+upscaler (Wan backbone + Flash decoder), not a re-generator: video in, 2× video out, source audio
+passed through. Use it as a finishing pass on H3/LTX output, or when the H3 refiner is too slow.
+
+- `RelayVSRModelLoader #1`: `bundle=RelayVSR_X2`, `dtype=bf16`, `offload=true`.
+- `RelayVSRUpscale #2`: `sr_ratio=2` is mandatory with X2 weights; `chunk_len=16`, `seed=42`.
+- `VHS_LoadVideoFFmpeg #3` → `RelayVSRUpscale` → `VHS_VideoCombine #4`.
+- Output is 2× the input; audio is not enhanced. `force_rate 24` + save at 24 fps is the shipped
+  24 fps path. For a 48 fps source, set `force_rate 0` and `frame_rate 48`.
+- `VHS_VideoCombine` muxes with `-shortest`; a 193-frame stream can lose its tail frame. Use
+  `CreateVideo` → `SaveVideo` if the exact tail matters.
+- Models: `models/relayvsr/RelayVSR_X2/{wan_x2,flash_x2}.safetensors`; node pack
+  `Comfyui-Relay-VSR`.
+- For a 4× pass, use ReCaVSR below; RelayVSR is the smaller 2× option.
+
+Full settings, cost, and gotchas: [`relayvsr/SKILL.md`](relayvsr/SKILL.md).
+
+### ReCaVSR X4 — one-step streaming 4× video super-resolution
+
+`workflows/recavsr/` contains a UI/API pair around four functional nodes. ReCaVSR is a one-step streaming
+diffusion VSR on Wan2.2 TI2V-5B: 21 frames, then 8 at a time, one denoising step per block, recycled
+latents and cached K/V, decoded block by block with its own FlashDecoder. It preserves the source audio
+and frame rate.
+
+- `LoadVideo #1` → `ReCaVSRUpscale #3` → `SaveVideo #4`; `ReCaVSRLoader #2` feeds `.model`.
+- `scale=4` is the trained path; `color_fix=none` (or `adain`/`wavelet`), `seed=42`,
+  `decoder=flashdecoder`, `kernels=fast`, `kv_offload=false`, `encoder=auto`.
+- Models in `models/recavsr/`: `transformer_int8_convrot.safetensors` (6.27 GB),
+  `flashdecoder.safetensors` (229 MB), `prompt.safetensors` (4.2 MB). Node pack `ComfyUI-ReCaVSR`
+  (GPL-3.0). bf16 transformer is optional; the Wan 2.2 VAE decoder is not shipped.
+- Cost ≈ `frames × output_MP × 0.030` s on a 4090. H3 0.3 MP → 4.9 MP in ~57 s per 8 s; 1 MP → 16.9 MP
+  in ~195 s. 16.9 MP fits 24 GB via the node's 4-frame input projection.
+- Gotchas: identical inputs are cached; the loader lists all three files (pick the transformer); scene
+  cuts shimmer; do not re-encode the output.
+
+Full settings, cost, quality, and gotchas: [`recavsr/SKILL.md`](recavsr/SKILL.md).
+
+### Viggle Remake — H3 recast/edit LoRA pair
+
+Viggle Remake is a rank-256 LoRA pair on the MiniMax-H3 base `transformer`, not a new checkpoint:
+`swap` recasts people/characters; `edit` removes, inserts or swaps objects and changes setting,
+weather or light. It re-renders a clip window with the source's motion, camera, framing and soundtrack,
+driven by one to four painted frames plus a six-section H3 prompt.
+
+- `workflows/viggle-remake/` has a UI/API pair for each mode. Both use the existing `fl2va` pruned
+  int8 base, the H3 Qwen3-VL encoder, and the H3 video/audio VAEs; only the 3.8 GB LoRAs are new.
+- Use core `LoraLoaderBypassModelOnly`, not `LoraLoaderModelOnly`; the merge path rounds away the
+  update. Loader: `models/loras/minimax/viggle_remake_{swap,edit}_comfyui.safetensors`.
+- `RemakeConditioning`: source must be **24 fps**, `17n+5` frames (90–345; public 124), one painted
+  `ref_1` (`<Picture 1>`), `pins` empty or one per ref, `short_edge=480`. `RemakeKeyframeUntil(0.9)`,
+  `RemakeNoise(seed)`, euler, and the mode's six-forward `ManualSigmas`.
+- `swap` sigmas `1.0, 0.990476, 0.965243, 0.923077, 0.8, 0.631579, 0.0`; `edit`
+  `1.0, 0.983607, 0.96, 0.923077, 0.857143, 0.705882, 0.0`.
+- 480p is the 24 GB setting (~2 min per 124-frame window). 736 does not fit the pruned-int8 + LoRA
+  stack; upscale the 480p window with ReCaVSR/RelayVSR afterwards.
+- The node pack `ComfyUI-Viggle-Remake` is Apache-2.0 and installed from the HF repo's `comfyui/`
+  folder; restart ComfyUI after installing.
+- Paint the reference from a source frame with the H3-Image edit graph. One ref is the tested path;
+  2–4 refs and `RemakePrefix` are untested.
+
+Full settings, prompt template, results, and gotchas: [`viggle-remake/SKILL.md`](viggle-remake/SKILL.md).
+
+### MiniMax-H3-Image — native 4–16 MP T2I and editing
+
+MiniMax-H3-Image is Comfy-Org's 33.1B H3 image model: the H3 architecture without the audio branch,
+one checkpoint for text-to-image and editing (up to 16 references), **6 steps at CFG 1**, and a native
+~16 MP with no upscaler. It is native ComfyUI **0.45.0+** (`MiniMaxH3ImageConditioning`), no custom
+nodes and no LoRAs. Five API graphs: 4 MP T2I, 16 MP T2I, and 1/2/4-reference edits.
+
+- `KSampler`: 6 steps, `cfg 1.0`, `euler`, `simple`, denoise 1.0; the negative is a zeroed conditioning,
+  so there is no negative prompt and no guidance pass.
+- w4a8 is the 24 GB default. int8 is ~2 s faster/slightly sharper but changes the composition at the
+  same seed; do not A/B a seed across builds. bf16 does not fit.
+- Sizes are multiples of 32: 2048² for iteration, 4096² for production, 5472×3072 for wide.
+  `width`/`height` 0 follows `image_1`'s size after reference scaling, or 2048² without an image.
+- Edit: `<Picture 1>` is the edited image; describe the finished image and state what is preserved.
+  Local attribute changes work; whole-scene re-imagining is partial and noisy. Object replacement from
+  `<Picture 2>` works structurally.
+- The public edit graphs ship 1, 2 and 4 references. The node accepts up to 16; adding references
+  re-composes the image (1↔4 20.19 dB, 1↔8 9.87 dB) and costs ~+11 s each. Keep 1–2 for identity and a
+  prop, 4 for a full composition. 16 refs were not tested.
+- Text is the standout: quote exact wording, place it, and state the order. Read
+  [`prompt-writing/minimax-h3-image-prompt-writer/SKILL.md`](prompt-writing/minimax-h3-image-prompt-writer/SKILL.md)
+  before filling a prompt.
+
+Full addresses, model set, runs, expander, and gotchas: [`h3-image/SKILL.md`](h3-image/SKILL.md).
+
+### P-H3-Image — native T2I and multi-reference edit
+
+P-H3-Image is PrunaAI's image distillation of MiniMax-H3. It is native ComfyUI 0.44.0+
+(`PH3ImageConditioning`), no custom nodes or LoRAs. The w4a8 set is the 24 GB option; bf16/int8 do not
+fit. Four graphs: 4-ref API/UI, 5-ref API, and T2I UI. Not the same model as MiniMax-H3-Image above:
+this is the 4 MP distillation; the native 33.1B model runs at 4–16 MP on 0.45.
+
+- `image_1` is the subject and sets the 4 MP canvas; refs go to `PH3ImageConditioning` at native size.
+- `BatchImagesNode` + `StringFormat` feed the prompt upsampler one `<Picture N>` block per image;
+  `TextGenerate` runs thinking off for edits.
+- Autogrow keys: `images.image_1..image_9` on the conditioning, `images.image0..N` on `BatchImagesNode`.
+- 8-step `ManualSigmas` + `euler`, cfg 1, `MiniMaxH3SigmaShift` 1.0/1.0.
+- Public copies use `example.png` for every slot and generic prompts; set all slots and map the
+  subject/setting/garment/prop in the prompt.
+
+Full addresses, model set, runs, and gotchas: [`ph3-image/SKILL.md`](ph3-image/SKILL.md).
+
+## MCP behavior and findings
+
+The full edit/validate/run/promote loop is in
+[`workflow-development/SKILL.md`](workflow-development/SKILL.md). The findings below are the parts
+that most often decide whether a run succeeds.
+
+### Workflow format
+
+- The MCP accepts both API-format and UI-export JSON, but complex UI exports can fail because
+  ComfyUI cannot execute frontend-only helpers. The shipped UI files were conversion-validated against
+  a reference target; re-check after a ComfyUI or node-pack upgrade.
+- Convert a UI export to API format with
+  `comfy run --print-prompt --json --host <host> --port <port>` and parse the `prompt_preview` event.
+  This prints a converted prompt; it does not modify the source file.
+- Strip `Fast Groups Bypasser (rgthree)` and `Label (rgthree)` before submitting; the target rejects
+  them with `missing_node_type`. `MarkdownNote` and `Note` are frontend-only and absent from
+  `/object_info`; conversion usually drops them. Conversion does **not** always drop Fast
+  Groups/Label — inspect the `prompt_preview` classes before submitting a UI file.
+- `Power Lora Loader (rgthree)` is a backend node and is accepted. Its per-slot `lora_N` objects are
+  preserved in the converted prompt; do not replace it with a plain `LoraLoaderModelOnly`.
+- Subgraph workflows (`definitions.subgraphs`) are supported; the MCP expands them client-side. Do not
+  hand-edit `definitions.subgraphs`.
+- Prefer the existing API-format files for execution, especially for MiniMax H3. For UI-only
+  workflows, convert first and check the `prompt_preview`; if it retains frontend-only nodes, copy the
+  workflow to `work/scratch/` and strip them there.
+
+### Submission and scheduling
+
+- Submit with `run_workflow({ workflow_path, wait: false })`, then wait with
+  `job({ action: "wait", prompt_id })`.
+- **`job(action="wait")` can fail at the tool level while the server job is still running.** Treat
+  `/history/<prompt_id>` and `/queue` as authoritative. Poll them directly; a `status_str` of
+  `success` in history is the completion signal.
+- One active job per target. Parallel work is allowed only across different targets.
+- Check `/system_stats` before starting after a crash or restart. Outputs persist across restarts.
+- Do not fire a batch of submissions at one target. The queue may accept them, but model loading and
+  concurrent GPU work have taken endpoints down.
+
+### Output collection
+
+- Download results into `work/outputs/<project>/<YYYY-MM-DD>/<prompt_id>/` and keep the remote
+  filename. Do not leave the only copy on the ComfyUI host.
+- Try `fetch_outputs` first. If it returns `download_job_not_found`, the prompt ID was submitted by a
+  different machine/agent or the local state was cleared; download the `outputs[0]` URL directly.
+- comfy-cli can leave local job state at `queued` after the server reports `completed`; in that case
+  `fetch_outputs` may fall back to a local address and fail. Download the `outputs[0]` URL from the
+  `job` result directly into the run's `prompt_id` folder and size-check the file.
+- **The target base URL is the ComfyUI URL, not the MCP host.** `outputs[0]` carries `filename`,
+  `subfolder`, and `type`; build the fallback as
+  `http://<comfy-host>:<port>/view?filename=<filename>&subfolder=<subfolder>&type=output`
+  (URL-encode spaces and special characters). `scripts/fetch_output.py` does this automatically.
+- Do not pass `inline_images: true`; collect the local copy, verify provenance, then read that copy if
+  vision is needed.
+
+### Uploads
+
+- Stage assets in `work/uploads/<project>/` first. `upload_file` keeps the local filename unless the
+  target already has that name, in which case it writes `name (1).ext`; the response's `cloud_name`
+  is what the graph must reference.
+- It supports images, video, and audio. TTS reference clips must be uploaded to every target that may
+  run the configuration.
+- Workflow paths are read on the MCP machine, not the ComfyUI host; resolve them to absolute paths
+  there.
+
+### Discovery
+
+- `search_models`, `nodes`, `validate_workflow`, `list_workflow_slots`, and template `local_check`
+  describe the local comfy-cli workspace, not the targets. `list_workflow_slots` is unreliable on
+  comfy-mcp 0.10.0; use `scripts/validate_workflow.py --url <target>` instead.
+- Use the target's HTTP endpoints for live checks:
+  - `/object_info/<Class>` for node availability and the **loader option lists** that name model files
+    (`unet_name`, `lora_name`, `clip_name`, `vae_name`, `ckpt_name`).
+  - `/system_stats` for version, package versions, VRAM, and uptime.
+- Loader option lists are authoritative. `/models/<folder>` can return an empty body even when the
+  target has the models, and it omits GGUF files that appear in `CLIPLoaderGGUF` options. Do not
+  conclude "nothing is installed" from `/models`.
+- `/object_info/Drama3Generate` shows the autogrow voice slots (max 16) and speaker-mode options.
+  `/object_info/LoadAudio` lists the input clips; sample clips differ between targets, so upload your
+  own.
+
+### Shared targets and tool scope
+
+A ComfyUI target has no per-agent identity, ownership, or access control. Agents pointed at the same
+target share its queue, history, `input/`, `output/`, local `work/outputs`, and comfy-cli job records
+for the same OS user. Separate MCP processes do not isolate them.
+
+- `job({ action: "queue" })` merges the target's `/queue` and roughly the last 10 `/history` entries;
+  it can show other agents' `prompt_id`s, statuses, and output counts. Use it for your own job and
+  queue health, not to enumerate other work.
+- `job({ action: "status", prompt_id })` reads `/history/<prompt_id>` and can return another job's
+  output metadata if you know its ID.
+- `fetch_outputs` is scoped by the local comfy-cli state file, not ownership: it works for a prompt ID
+  this machine submitted and returns `download_job_not_found` otherwise. Download the output URL
+  directly in that case.
+- `/queue`, `/history`, and `/view?filename=...` bypass the MCP entirely. ComfyUI has no built-in
+  authentication; rely on network isolation, not on the MCP for access control. `/history/<prompt_id>`
+  also includes the prompt graph and input values, so treat prompt text as visible to anyone with
+  target access.
+- Do not cancel or collect a job without checking its `prompt_id` and provenance.
+
+| Remote-aware tools (follow `COMFYUI_URL`) | Local-only tools |
+| - | - |
+| `run_workflow`, `run_template`, `generate_image`, `job`, `upload_file`, `fetch_outputs` | `system_stats`, `free_memory`, `launch_comfyui`/`stop_comfyui`/`install_node`, `download_model`, `search_models`, `nodes`, `validate_workflow`, `list_workflow_slots`, template `local_check` |
+
+## Local tooling and post-production
+
+Tooling lessons that apply to any host:
+
+- Use a real ffmpeg build for metadata, concat, audio muxing, and drawtext. The MCP venv's
+  `imageio-ffmpeg` binary is a reliable fallback when the system has none; do not assume a specific
+  install path.
+- Windows drawtext: `font='Arial'` works. A `fontfile` path needs correct escaping; the wrong form
+  fails with “No option name near …”.
+- Run Python analysis scripts from a clean directory. A stray `inspect.py` (or similar) in the current
+  directory shadows the standard library module and breaks imports.
+- Use a dedicated analysis venv with `librosa`, `faster-whisper`, and `Pillow` (titles). Do not
+  install analysis dependencies into the MCP venv.
+- Remote outputs persist on disk even when the ComfyUI HTTP server is down; job state can still list
+  queued/completed jobs.
+
+Post-production:
+
+- Analyze the selected track's tempo/beats before choosing shot lengths. Place cuts on beats or bars.
+- Avoid a uniform clip length. Mix short cuts and longer holds; generate varied source durations, then
+  trim/punch-in/speed-ramp in post.
+- Provide each generated clip the **exact audio segment** for its section when the model accepts audio
+  reference, then use the full track in the final mux. Audio reference conditions voice/energy; it
+  does not force the output waveform or guarantee lip-sync.
+- **Audio-offset alignment preserves the model's own A/V relationship, not an external track.** If the
+  model generated its own audio, placing the clip at its source segment start keeps the generated
+  mouth aligned to the generated audio. Replacing that audio with a different track breaks phoneme
+  sync. Use the forced audio latent or a dedicated lip-sync pass if the final track must drive the
+  mouth.
+- Use a previous clip as a video reference for later performance shots to reduce lighting and style
+  drift. Intercut performance with b-roll for texture.
+- Apply one consistent grade, grain, vignette, and fades across all sources; individual clips may
+  differ in lighting.
+- **Measure loudness before normalizing.** If the track is already near −14 LUFS, apply a small
+  negative gain to bring the true peak below −1 dBFS instead of running `loudnorm`, which can pump.
+- **Use a transparent PNG for titles with fades.** Render the card with Pillow and overlay it with
+  `fade=alpha=1`; this avoids drawtext escaping and gives predictable typography.
+- Verify the final by metadata and decode check. The agent may inspect its own outputs for QA, but the
+  user watches/listens and judges.
+
+### Batch production
+
+- **Preflight every loader value** on each target before the first submit. Fail in two seconds, not
+  four minutes. Use `/object_info/<LoaderClass>`; `/models` is not reliable.
+- **`COMFY_LOCAL_URL`, if set, must equal `COMFYUI_URL`.** A mismatch makes `fetch_outputs` resolve
+  against a local default and fail with `RemoteDisconnected`. Restart the MCP process after changing
+  either value.
+- **Plan from a cost model.** Reference points on a 24 GB card: H3 hero 1.0 MP ≈4 min, dance 0.7 MP
+  ≈3 min, b-roll 0.5 MP ≈2 min, Music 3 song ≈4 min, still ≈1 min. Split the manifest by cost so no
+  target is the straggler.
+- **Check `/queue` before committing a batch.** A foreign job parks yours and `job(wait)` looks like a
+  hang. Cancel only your own `prompt_id`s; resubmit to a free target if needed.
+- **Persist each shot the moment it lands** under `work/outputs/<project>/<date>/<prompt_id>/`. A driver
+  that writes results only at exit loses the map if it is killed; save prefixes are fixed and
+  `prompt_id` is the durable identifier.
+- **Lip sync is a placement contract.** A forced-audio piece must sit at its own offset inside its
+  block, with b-roll cut across it. Sliding it makes the mouth late.
+- **Quantize edit boundaries to frames:** `frames = round(t1*FPS) - round(t0*FPS)`. Accumulating
+  per-piece durations compounds rounding into visible drift.
+- **Measure the track, then build the grid.** A brief may ask for 120 BPM and deliver 136. Use
+  `librosa` beat tracking plus a small ASR pass for BPM, first vocal, and verse/chorus boundaries
+  before choosing cut lengths.
+- **Cast budget: two faces, one silhouette.** Identity drift is invisible at four cuts per bar and
+  glaring at a four-beat hold.
+- **Vision-check one frame per new prompt**, on your own output only: body count, hands, and identity.
+- **Delivery ladder.** A 1080×1920 CRF 18 master runs 60–80 MB/minute; a 720p CRF 26 build with
+  `maxrate 1700k` lands near 13 MB for 60 s and always sends. Budget ~230 KB per second of runtime.
+
+## Verification and provenance
+
+A workflow is technically verified when:
+
+1. `run_workflow` returns a `prompt_id`.
+2. `job(action="wait")` (or `/history/<prompt_id>`) reports `completed`/`success` with no error.
+3. At least one output URL is returned and the downloaded file has non-zero size.
+
+Vision is creative QA, not technical verification. Use vision only on your own inputs and outputs as
+defined in the hard rules. Record the `prompt_id` and local paths before inspecting. If the active
+model cannot accept images, use a local vision model or ask the user; do not claim to have inspected a
+file you could not open.
+
+Technical completion does not verify lip-sync. If the final audio is an external track, either force
+the audio latent and verify the output audio matches the source (ASR/spectra), or check the generated
+audio against the intended segment and treat lip-sync as a separate acceptance criterion.
+
+Record results in the run log (`work/logs/run-log.md`) with the `prompt_id`, output path, and bytes.
+The run log is local to a deployment and is not shipped with the repository; the statuses in this file
+summarize the evidence that travels. Update the status cells in this file when a workflow becomes
+verified. Technical verification is not
+creative approval; the user judges the result.
+
+Current run-record gaps (portable summary):
+
+- YuE2 has a short test-copy record only; re-run at full length before production.
+- MOSS-Image has pre-sanitization verification runs; the public graph is conversion-validated only, so
+  re-run it once after sanitization.
+- In `workflows/fishdrama3/`, only `single-speaker-no-reference` has a completed run; the other three
+  variants are conversion-validated only.
+- The H3 `1v1a`, `1p1v1a`, `2p1v`, `2p1a`, and `2p1v1a` variants are generated-only.
+- Flux Klein T2I/I2I, Krea, Music 3, the two `-forced` H3 variants, and the three `charreplace-*`
+  workflows have completed runs recorded in the local run log.
+
+Before production:
+
+- Run one sanitized job per family; conversion is not execution.
+- Stage `example.png` / `example.mp4` / `example.wav` on every target that may run the workflow.
+- Drama 3 clone modes need the reference clips uploaded to every target and a high-RAM host.
+- Charreplace needs the TensorRT depth engine built on the target GPU.
+- Re-run YuE2 at the full 120 s length; its earlier record used a short test copy.
+
+## Common issues and fixes
+
+| Symptom | Likely cause | Fix |
+| - | - | - |
+| `missing_node_type` for `Fast Groups Bypasser (rgthree)`, `Label (rgthree)`, `MarkdownNote`, or `Note` | Frontend-only nodes in an API graph | Strip them in a scratch copy. Never edit the template file. `Power Lora Loader (rgthree)` is a backend node and stays. |
+| `'dict' object has no attribute 'shape'` in MiniMax H3 | RIFE received a latent dict because `Final Images`/`Final Audio` selected the bypassed upscale path | Select the active single-pass decoders; disconnect `any_01`. |
+| `SaveImage` fails with `WinError 123` | `%date:...%` or another unresolved frontend token in the save prefix | Use a static save prefix. |
+| Outputs land in unexpected remote folders | An agent changed a workflow save prefix | Never change `filename_prefix`; collect the run by `prompt_id` into `work/outputs`. |
+| `text2image-moss.json` ignores edits to the inner KSampler, seed, size, or loaders | The subgraph instance overrides those widgets | Edit instance `#18` (steps/cfg/sampler/scheduler/negative/models), `ResolutionSelector #19` (size), and `SeedNode #3072` (seed). |
+| 2K upscale fails with missing `MiniMaxH3LatentUpscaleWithModel` | ComfyUI is older than PR #17412 | Update ComfyUI; verify `/object_info/MiniMaxH3LatentUpscaleWithModel`. |
+| IC graph fails on `BlockSparseAttention` or `ModelAttentionBackend` | ComfyUI is older than 0.44.0 | Update ComfyUI; both are core 0.44 nodes. |
+| IC 2K looks grainy, grid-like, or over-sharp | The draft came from the fastvideo 4-step preset | Use a Pika H3 Flex 6-step draft; re-run the IC pass. |
+| IC 2K re-composes the shot instead of preserving it | Wrong refiner or sigma grid | Use `upscale-minimax-2k-ic.api.json` with `up3`; the 2-step graph and `up4` both change more. |
+| IC LoRA alphas look "wrong" | Kijai bakes the scale into `lora_B` and writes residual alpha scalars | Leave them alone; the shipped rank-16 2K refiner uses the same convention. |
+| Perfect loop fails with missing `MiniMaxH3ContexMaskedAVBridge` | `ComfyUI-MiniMaxH3-Context-Loop` is missing or old | Install/update the pack, restart ComfyUI, then `--print-prompt` again. |
+| Perfect loop has an audible gap at the seam | `VHS_VideoCombine` cut audio at the last video DTS | Keep the shipped `CreateVideo` -> `SaveVideo` path; check stream durations with `ffprobe`. |
+| SAM3 matte drifts or plays at the wrong speed | `20.frame_rate` does not match the source fps | Set it to the source fps; the loader fps is not wired to the saver. |
+| H3 8 s clip is 7.979 s and the timeline drifts | 192-frame request becomes 383 frames after RIFE; the container adds an AAC tail | Probe the video stream, not `format=duration`; pad/trim or request 209 frames. |
+| Pika H3 output is mushy or broken | 8-step scheduler, sigma-shift node, or a stacked turbo adapter | Use `lcm`, the seven Pika sigmas, one adapter at 1.0, and no sigma-shift node. |
+| Pika Ref2VA loses reference identity | Wrong base/adapter pairing | Use `ref2va_pruned` + `pika_h3_flex_ref2va_v1_bf16`; fl2va is for T2V/FL2VA. |
+| Klein multi-ref ignores a reference or mixes subjects | A `LoadImage` slot is unset, or the prompt uses “reference 2” | Set every slot `#710`–`#713`; describe subjects by content (“the woman”, “the coat”). Reference 1 still sets the canvas. |
+| LTX-2.5 video plays at the wrong speed | `VHS_VideoCombine.frame_rate` does not match 24 fps | Set it to 24; 8 turns 8 s of audio into a 24 s video. |
+| LTX-2.5 frames drop or decode short | Frame count is not `8n+1` | Use 193 or 201; 197 decodes as 193. |
+| LTX-2.5 ref2v loses identity | Reference prompt names clothing, or `reference_guidance_scale` is too low | Keep the prompt vague about wardrobe; raise guidance to 2–4. |
+| LTX-2.5 OOM on 24 GB | Dropped `PathchSageAttentionKJ`, `LTXVChunkFeedForward`, or `LTX2AttentionTunerPatch` | Keep all three; 22B int8 + Gemma 12B streams weights. |
+| RelayVSR raises `RelayVSR x2 权重仅支持 2 倍放大` | `sr_ratio` is not 2 | Use `sr_ratio=2` with X2 weights. |
+| RelayVSR output plays fast/slow | `force_rate` and save `frame_rate` disagree | Set both to the source rate, or `force_rate 0` and the source fps. |
+| RelayVSR OOM at 1080p | `offload` disabled or chunk too large | Keep `offload=true`, reduce `chunk_len`, or lower source resolution. |
+| RelayVSR bundle missing after adding weights | Bundle list is scanned at import | Restart ComfyUI or set the loader's advanced `path`. |
+| ReCaVSR loader lists `prompt`/`flashdecoder` as transformers | The loader lists every file in `models/recavsr` | Pick `transformer_int8_convrot.safetensors`. |
+| ReCaVSR re-run finishes in 0.2 s | ComfyUI cached identical node inputs | Change the seed for a real repeat timing. |
+| ReCaVSR output shimmers just after a scene cut | The node carries recycled latents/history across the cut | Split each shot and upscale it as its own clip. |
+| ReCaVSR cold run is much slower than warm | Triton builds attention kernels per output size | Warm up once at that size, then compare warm runs. |
+| ReCaVSR `decoder: vae` is very slow or OOMs at 4K | Wan 2.2 VAE decodes the whole video and tiles at 4K | Use `flashdecoder`; the VAE is for final texture only. |
+| `ReCaVSRLoader` missing | `ComfyUI-ReCaVSR` not installed on that target | Install the pack, restart, and verify `/object_info/ReCaVSRLoader`. |
+| `RemakeConditioning` / `RemakeNoise` missing | `ComfyUI-Viggle-Remake` not installed or not restarted | Run `install_nodes.py`, restart ComfyUI, verify `/object_info/RemakeConditioning`. |
+| Viggle output looks soft / the recast is weak | `LoraLoaderModelOnly` merged the LoRA at bf16 | Use core `LoraLoaderBypassModelOnly`; do not merge. |
+| Viggle `short_edge 736` stalls for tens of minutes | 1280×736 does not fit the pruned-int8 + LoRA stack on 24 GB | Render at 480p (`short_edge=480`), then upscale with ReCaVSR/RelayVSR. |
+| Viggle rejects the source or renders the wrong length | Source is not 24 fps or not `17n+5` frames | Use 124/141/…/345 frames at 24 fps; the public graph uses 124. |
+| Viggle output is silent | The source had no audio | The soundtrack is carried, not generated; supply a source with audio. |
+| P-H3-Image `PH3ImageConditioning` missing | ComfyUI is older than 0.44.0 | Update ComfyUI; verify `/object_info/PH3ImageConditioning`. |
+| P-H3-Image OOM | bf16/int8 set or 8 MP on 24 GB | Use the w4a8 diffusion/encoder/upsampler/VAE set; 4 MP is the tested size. |
+| P-H3-Image ignores a reference | A slot is unset or the prompt does not bind `<Picture N>` | Set every image slot; name the subject/setting/garment/prop per picture. |
+| H3-Image `MiniMaxH3ImageConditioning` missing or empty | ComfyUI older than 0.45.0, or a partial build | Update to 0.45.0+; verify the node lists `clip`, `prompt`, `width`, `height`. |
+| H3-Image output is the wrong size | Width/height not a multiple of 32 | Use 2048², 4096², 5472×3072, 4736×3552, etc. |
+| H3-Image edit is noisy or only partly changes | Whole-scene re-imagining against a strong reference | Change one local attribute; describe the finished image and state what is preserved. |
+| H3-Image multi-ref output changes between 1/4/8 refs | Adding references re-composes, not just informs | Judge identity on faces; keep 1–2 refs for identity and a prop, 4 for a full composition. |
+| H3-Image seed does not reproduce across builds | w4a8 and int8 change the composition at the same seed | Pick one build and stay on it. |
+| H3-Image text is wrong or missing | Unquoted or unplaced text | Quote exact wording, say where it sits, and state the order. |
+| SAM3 returns a nearly-full matte | Absent target falls back to the salient object, or categories union | Use one specific category, raise `13.threshold`, and check mean luma; never stack speculative categories. |
+| SAM3 video frame count multiplies | `13.individual_masks=true` on video | Keep it `false` for video. |
+| SAM3 classes missing or resolve to an old custom pack | ComfyUI lacks core `comfy_extras.nodes_sam3` | Update to 0.43.0+; verify `/object_info/SAM3_Detect` reports `comfy_extras.nodes_sam3`. |
+| `GrowMaskWithBlur` missing | `ComfyUI-KJNodes` not installed | Install KJNodes, or wire `SAM3_Detect`/`SAM3_TrackToMask` directly to `MaskToImage`. |
+| Job state stays `queued` after the server reports `completed` | Local job-state lag | Download the `outputs[0]` URL from the `job` result and size-check it. |
+| `fetch_outputs` errors connecting to a local address | Local state missing; tool fell back to a local ComfyUI URL | Build `http://<comfy-host>:<port>/view?filename=...&subfolder=...&type=output` from `outputs[0]`, or use `scripts/fetch_output.py`. |
+| `fetch_outputs` returns `download_job_not_found` | The `prompt_id` was submitted by another machine/agent, or local state was cleared | Download from the target's `/view` URL; only inspect files tied to your own `prompt_id`. |
+| A file in `work/outputs` or the target's `output/` looks interesting, but you did not submit its job | It belongs to another agent or an older run | Do not use vision. Only inspect files traceable to your own `prompt_id` + run-log entry. |
+| A legacy GGUF text encoder looks missing from `/models/text_encoders` | GGUF files are not listed in that folder | Install the optional `ComfyUI-GGUF` pack; public Flux uses `CLIPLoader` with `qwen_3_8b_fp8mixed.safetensors`. |
+| `/models/<folder>` is empty or omits a model the target obviously has | `/models` is not a reliable inventory | Check `/object_info/<LoaderClass>` and read the `unet_name`/`lora_name`/`clip_name`/`vae_name` option list. |
+| `list_workflow_slots` raises or returns nothing | comfy-mcp 0.10.0 bug; it is local-only anyway | Use `comfy run --print-prompt` and `scripts/validate_workflow.py --url <target>` for a remote preflight. |
+| `server_info` shows a local GPU that is not the target host | `hardware` describes the MCP host; `comfy_target` describes the target | Route on `comfy_target`; use the target's `/system_stats` for the actual host. |
+| `system_stats`/`free_memory` reports the wrong GPU | Those tools are not redirected by `COMFYUI_URL`; they describe the local comfy-cli install | Query `http://<target>/system_stats` for the target host. `free_memory` cannot free a remote or another process. |
+| `download_model` refuses | `COMFYUI_URL` is set | Install the model on the target host; do not bypass with `COMFY_MCP_REMOTE_SHARED_MODELS` unless storage really is shared. |
+| `launch_comfyui` / `stop_comfyui` / `install_node` affects the wrong install | Those tools are local-only | Do not use them for remote targets; manage the target host directly. |
+| Same tools appear twice | Two server names point at the same command | Remove the duplicate registration. |
+
+## Maintaining this skill
+
+This file is the repository's operating skill. Keep it portable and current.
+
+- **Stay portable.** No absolute paths, no drive letters, no hostnames or IPs, no personal install
+  paths, no dates, no run history. Deployment specifics belong in `MCP-SETUP.md`; run evidence
+  belongs in `work/logs/run-log.md`.
+- **Update after every run or failure:** status cells, findings, and the common-issues table. Prefer a
+  bullet or table row over prose.
+- **Document new workflows with maintainer approval.** Read the JSON, inspect the live target
+  (`/object_info`, `/system_stats`), then document file name, task, model behavior, node
+  packs, effective settings, inputs, save prefix, status, and gotchas.
+- **Test variants safely.** Change widgets/links in ComfyUI or write a copy under `work/scratch`, run
+  it, and record the result. Never create API variants in the workflow directories.
+- **Recompute checksums only when a workflow JSON legitimately changes** (an approved maintainer
+  edit). Never modify a file to make it match an external record.
+- **Keep family notes with their family.** `skills/minimaxh3/SKILL.md` and
+  `skills/fish-audio-drama3/SKILL.md` hold family-specific detail; this file holds routing and rules.
+
+## Target requirements
+
+> A machine with nothing installed yet? Follow [`COMFY-SETUP.md`](../COMFY-SETUP.md) first. It covers
+> ComfyUI, PyTorch/CUDA, every custom-node pack, every model file, and the TensorRT depth engine.
+
+- ComfyUI 0.45.0 or newer (MiniMax-H3-Image needs `MiniMaxH3ImageConditioning`; P-H3-Image needs
+  0.44's `PH3ImageConditioning`; the perfect loop also needs `CreateVideo`/`SaveVideo`).
+- 2K upscale/refine needs `MiniMaxH3LatentUpscaleWithModel` (ComfyUI PR #17412 or newer). The IC path
+  also needs 0.44's core `BlockSparseAttention`, `ModelAttentionBackend`, `ComfyMathExpression`, and
+  `TrimAudioDuration`.
+- ComfyUI frontend 1.57.1 or newer.
+- `comfy-aimdo` >= 0.6.0, `comfy-kitchen` >= 0.2.40, `comfyui-workflow-templates` >= 0.11.96.
+- Node packs: `rgthree-comfy`, `RES4LYF`, `was-node-suite-comfyui`,
+  `comfyui-easy-use`, `comfyui-various`, `ComfyUI-KJNodes`, `ComfyUI-VideoHelperSuite`,
+  `ComfyUI-Drama3`, `comfyui-krea2edit`, `ComfyUI-ConditioningKrea2Rebalance`,
+  `comfyui-plaguekind-nodes`, `ComfyUI-MiniMaxH3-Context-Loop`, `ComfyUI-BFSNodes`,
+  `Comfyui-Relay-VSR`, `ComfyUI-ReCaVSR`, `ComfyUI-Viggle-Remake`, `ComfyUI_Fill-Nodes`,
+  `ComfyUI-Spectrum-MiniMax-H3`, `ComfyUI-Impact-Pack`,
+  `ComfyUI-Depth-Anything-Tensorrt`.
+  Optional: `ComfyUI-Frame-Interpolation` (the H3 graphs use Fill-Nodes `FL_RIFE`), the latent
+  upscaler pack, and `ComfyUI-GGUF` (legacy GGUF graphs only; public Flux uses `CLIPLoader`).
+- Native SAM3 needs core `comfy_extras.nodes_sam3` (0.43.0+). No custom SAM3 pack is required.
+- LTX-2.5 needs core `comfy_extras.nodes_lt*`, `ComfyUI-BFSNodes` for ref2v identity conditioning,
+  and the Gemma 4 12B encoder (`CLIPLoader` type `ltxv`).
+- RelayVSR needs `Comfyui-Relay-VSR` and VideoHelperSuite; no extra pip packages.
+- ReCaVSR needs `ComfyUI-ReCaVSR` (its requirements install `triton` and `opencv-python-headless`, both
+  with fallbacks) and `models/recavsr/{transformer_int8_convrot,flashdecoder,prompt}.safetensors`. The
+  bf16 transformer and Wan 2.2 VAE decoder are optional and not shipped.
+- Viggle Remake needs `ComfyUI-Viggle-Remake` (installed from the HF repo's `comfyui/` folder; no pip
+  deps) and `models/loras/minimax/viggle_remake_{swap,edit}_comfyui.safetensors`. It reuses the H3
+  `fl2va` int8 base, Qwen3-VL encoder, and video/audio VAEs.
+- P-H3-Image needs ComfyUI 0.44.0+ and its w4a8 model set; no custom pack or LoRA.
+- MiniMax-H3-Image needs ComfyUI 0.45.0+ and its w4a8 DiT + image VAE + the shared Qwen3-VL-32B
+  encoder; no custom pack or LoRA.
+- Models: see the family sections. Verify each target's loader option lists
+  (`/object_info/<Class>`) rather than assuming the reference deployment's inventory or trusting
+  `/models/<folder>`, which can be empty.
+- Optional bypassed models that may be absent and are **not** on any effective path:
+  `minimax_h3_latent_upscaler_3d_bf16`, `minimax_h3_video_vae_int8_convrot`,
+  `qwen3vl_32b_minimax_h3_nvfp4_awq`, and
+  `krea2bypass_balanced`/`krea2filterbypass3` (disabled slots).
+- RAM/VRAM: all documented workflows assume a 24 GB-class GPU. Drama 3 loads 38.6 GB of experts into
+  system RAM; prefer a target with ample RAM and confirm with `/system_stats`.
+
+## Family notes
+
+- `README.md` — quick start, model list, contribution guide.
+- `skills/minimaxh3/SKILL.md` — fastvideo variant matrix, timing, and lip-sync guidance.
+- `skills/minimaxh3-pika/SKILL.md` — Pika H3 Flex default 6-step generation (T2V/FL2VA/Ref2VA).
+- `skills/minimaxh3-character-replace/SKILL.md` — character-replacement setup and run examples.
+- `skills/minimaxh3-upscale/SKILL.md` — 2K t2v/v2v upscale, 2-step re-synthesis refiner, and 3-step IC fidelity refiner.
+- `skills/minimaxh3-perfect-loop/SKILL.md` — seamless 154-frame T2AV loop and seam checks.
+- `skills/ltx2-5/SKILL.md` — LTX-2.5 t2v/ref2v/i2v with joint audio.
+- `skills/relayvsr/SKILL.md` — RelayVSR X2 2× video upscale and audio passthrough.
+- `skills/recavsr/SKILL.md` — ReCaVSR X4 one-step streaming 4× video upscale and audio passthrough.
+- `skills/viggle-remake/SKILL.md` — Viggle Remake H3 LoRA pair for recasting and editing clips.
+- `skills/ph3-image/SKILL.md` — P-H3-Image native T2I and multi-reference edits.
+- `skills/h3-image/SKILL.md` — MiniMax-H3-Image native 4–16 MP T2I and reference editing.
+- `skills/sam3/SKILL.md` — native SAM3 image/video mattes, prompt grammar, and alpha compositing.
+- `skills/workflow-development/SKILL.md` — scratch edits, validation, MCP submission, and promotion.
+- `skills/prompt-writing/README.md` — index of the eight family prompt-writing skills.
+- `skills/fish-audio-drama3/SKILL.md` — TTS variant index and reference requirements.
+- `work/README.md` — workspace rules and the pointer to this file.

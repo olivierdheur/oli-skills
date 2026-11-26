@@ -249,6 +249,36 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "FYP Skills",
     active: "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/25",
   },
+  "gen-media": {
+    badge: "border-purple-400/50 bg-purple-50 text-purple-700 dark:border-purple-500/30 dark:bg-purple-950/50 dark:text-purple-300",
+    icon: "from-purple-500 to-violet-500",
+    label: "Gen Media",
+    active: "bg-gradient-to-r from-purple-500 to-violet-500 text-white shadow-lg shadow-purple-500/25",
+  },
+  pexo: {
+    badge: "border-rose-400/50 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/50 dark:text-rose-300",
+    icon: "from-rose-500 to-pink-500",
+    label: "Pexo AI",
+    active: "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/25",
+  },
+  comfiest: {
+    badge: "border-amber-400/50 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/50 dark:text-amber-300",
+    icon: "from-amber-500 to-orange-500",
+    label: "Comfiest",
+    active: "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25",
+  },
+  "media-skills": {
+    badge: "border-indigo-400/50 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-950/50 dark:text-indigo-300",
+    icon: "from-indigo-500 to-blue-500",
+    label: "Media Skills",
+    active: "bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg shadow-indigo-500/25",
+  },
+  "comfyui-dev": {
+    badge: "border-lime-400/50 bg-lime-50 text-lime-700 dark:border-lime-500/30 dark:bg-lime-950/50 dark:text-lime-300",
+    icon: "from-lime-500 to-green-500",
+    label: "ComfyUI Dev",
+    active: "bg-gradient-to-r from-lime-500 to-green-500 text-white shadow-lg shadow-lime-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -336,6 +366,11 @@ const categoryIcons: Record<string, string> = {
   "Ads": "📢",
   "Copywriting": "✍️",
   "Influencer": "⭐",
+  "Video Generation": "🎬",
+  "Image Generation": "🖼️",
+  "3D & Spatial": "🎮",
+  "Audio Generation": "🎵",
+  "Creative Direction": "🎨",
   "Specialist": "🎯",
 };
 
@@ -378,6 +413,11 @@ const sourceToPath: Record<string, string> = {
   "content-creation": ".content-creation/skills",
   copywriting: ".copywriting/skills",
   fyp: ".fyp/skills",
+  "gen-media": ".gen-media/skills",
+  pexo: ".pexo/skills",
+  comfiest: ".comfiest/skills",
+  "media-skills": ".media-skills/skills",
+  "comfyui-dev": ".comfyui-dev/skills",
 };
 
 const suggestedSearches = [
