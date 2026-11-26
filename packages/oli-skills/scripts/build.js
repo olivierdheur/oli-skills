@@ -18,6 +18,7 @@ const SKILL_SOURCES = [
   { source: 'seo', path: '.claude-seo/skills' },
   { source: 'agency', path: '.agency/skills' },
   { source: 'mattpocock', path: '.mattpocock/skills' },
+  { source: 'jmanico', path: '.jmanico/skills' },
 ];
 
 console.log('Building oli-skills package...\n');

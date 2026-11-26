@@ -16,6 +16,7 @@ const SKILLS_DIRS = [
   { path: ".claude-seo/skills", source: "seo" },
   { path: ".agency/skills", source: "agency" },
   { path: ".mattpocock/skills", source: "mattpocock" },
+  { path: ".jmanico/skills", source: "jmanico" },
 ];
 
 const categoryPatterns = [
