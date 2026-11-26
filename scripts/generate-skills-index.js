@@ -32,6 +32,12 @@ const SKILLS_DIRS = [
   { path: ".gtm/skills", source: "gtm" },
   { path: ".finance/skills", source: "finance" },
   { path: ".analytics/skills", source: "analytics" },
+  { path: ".claude-legal/skills", source: "claude-legal" },
+  { path: ".lq-skills/skills", source: "lq-skills" },
+  { path: ".kevin/skills", source: "kevin" },
+  { path: ".uk-legal/skills", source: "uk-legal" },
+  { path: ".ai-legal/skills", source: "ai-legal" },
+  { path: ".ukummar-legal/skills", source: "ukummar-legal" },
 ];
 
 // Hierarchical category structure: "Parent > Subcategory"
@@ -45,6 +51,15 @@ const categoryPatterns = [
   
   // Marketing Research (must be before AI > Video to avoid false matches on "video")
   { category: "Marketing > Research", patterns: [/instagram-research/i, /tiktok-research/i, /youtube-research/i, /x-research/i, /content-ideas/i, /content-planner/i, /video-content-analyzer/i, /focus-group/i] },
+  
+  // Legal (before Business patterns)
+  { category: "Legal > Contracts", patterns: [/contract/i, /nda/i, /msa/i, /agreement/i, /redline/i, /clause/i, /negotiate/i, /terms/i, /indemnity/i, /liability/i, /termination/i, /obligation/i] },
+  { category: "Legal > Compliance", patterns: [/compliance/i, /gdpr/i, /ccpa/i, /dpa/i, /regulatory/i, /ai.?act/i, /privacy/i, /data.?protection/i] },
+  { category: "Legal > Due Diligence", patterns: [/diligence/i, /vdr/i, /m&a/i, /merger/i, /acquisition/i, /investigation/i] },
+  { category: "Legal > Corporate", patterns: [/corporate/i, /governance/i, /board/i, /shareholder/i, /equity/i, /incorporation/i] },
+  { category: "Legal > IP", patterns: [/intellectual.?property/i, /patent/i, /trademark/i, /copyright/i, /ip.?audit/i, /licensing/i] },
+  { category: "Legal > Employment", patterns: [/employment/i, /hr/i, /hiring/i, /termination/i, /compensation/i, /ir35/i, /freelancer/i] },
+  { category: "Legal > General", patterns: [/legal/i, /lawyer/i, /attorney/i, /counsel/i, /litigation/i, /dispute/i] },
   
   // Business & Strategy (before general patterns)
   { category: "Business > Market Intelligence", patterns: [/mi-collect/i, /mi-analyze/i, /mi-size/i, /mi-scan/i, /mi-watch/i, /mi-build/i, /mi-fuse/i, /mi-mine/i, /mi-sweep/i, /mi-refresh/i, /osint/i, /finint/i, /techint/i, /humint/i, /sigint/i, /masint/i, /geoint/i, /demoint/i] },
@@ -141,8 +156,22 @@ const categoryPatterns = [
   { category: "Roles > General", patterns: [/agency/i, /coach/i, /coordinator/i, /producer/i] },
 ];
 
-function detectCategory(name, description) {
+function detectCategory(name, description, source) {
   const text = `${name} ${description}`.toLowerCase();
+  
+  // For legal sources, check legal patterns first
+  const isLegalSource = /legal|lq-skills|kevin/.test(source);
+  if (isLegalSource) {
+    const legalPatterns = categoryPatterns.filter(p => p.category.startsWith("Legal"));
+    for (const { category, patterns } of legalPatterns) {
+      for (const pattern of patterns) {
+        if (pattern.test(text)) return category;
+      }
+    }
+    // Default to Legal > General for legal sources without specific match
+    return "Legal > General";
+  }
+  
   for (const { category, patterns } of categoryPatterns) {
     for (const pattern of patterns) {
       if (pattern.test(text)) return category;
@@ -195,7 +224,7 @@ function getSkillsFromDir(dirPath, source) {
         files,
         filesContent,
         source,
-        category: detectCategory(skillName, skillDescription),
+        category: detectCategory(skillName, skillDescription, source),
       };
     })
     .filter(Boolean);

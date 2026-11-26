@@ -165,6 +165,42 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "Analytics",
     active: "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/25",
   },
+  "claude-legal": {
+    badge: "border-indigo-400/50 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-950/50 dark:text-indigo-300",
+    icon: "from-indigo-600 to-violet-500",
+    label: "Claude Legal",
+    active: "bg-gradient-to-r from-indigo-600 to-violet-500 text-white shadow-lg shadow-indigo-500/25",
+  },
+  "lq-skills": {
+    badge: "border-purple-400/50 bg-purple-50 text-purple-700 dark:border-purple-500/30 dark:bg-purple-950/50 dark:text-purple-300",
+    icon: "from-purple-600 to-fuchsia-500",
+    label: "Legal Quants",
+    active: "bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-lg shadow-purple-500/25",
+  },
+  kevin: {
+    badge: "border-teal-400/50 bg-teal-50 text-teal-700 dark:border-teal-500/30 dark:bg-teal-950/50 dark:text-teal-300",
+    icon: "from-teal-600 to-cyan-500",
+    label: "Kevin AI",
+    active: "bg-gradient-to-r from-teal-600 to-cyan-500 text-white shadow-lg shadow-teal-500/25",
+  },
+  "uk-legal": {
+    badge: "border-blue-400/50 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/50 dark:text-blue-300",
+    icon: "from-blue-700 to-blue-500",
+    label: "UK Legal",
+    active: "bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-lg shadow-blue-500/25",
+  },
+  "ai-legal": {
+    badge: "border-rose-400/50 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/50 dark:text-rose-300",
+    icon: "from-rose-600 to-pink-500",
+    label: "AI Legal",
+    active: "bg-gradient-to-r from-rose-600 to-pink-500 text-white shadow-lg shadow-rose-500/25",
+  },
+  "ukummar-legal": {
+    badge: "border-amber-400/50 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/50 dark:text-amber-300",
+    icon: "from-amber-600 to-orange-500",
+    label: "Legal AI Skills",
+    active: "bg-gradient-to-r from-amber-600 to-orange-500 text-white shadow-lg shadow-amber-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -240,6 +276,13 @@ const categoryIcons: Record<string, string> = {
   "Operations": "⚙️",
   "Video": "🎬",
   "Research": "🔬",
+  "Legal": "⚖️",
+  "Contracts": "📄",
+  "Compliance": "✅",
+  "Due Diligence": "🔍",
+  "Corporate": "🏢",
+  "IP": "💡",
+  "Employment": "👔",
   "Specialist": "🎯",
 };
 
@@ -268,6 +311,12 @@ const sourceToPath: Record<string, string> = {
   gtm: ".gtm/skills",
   finance: ".finance/skills",
   analytics: ".analytics/skills",
+  "claude-legal": ".claude-legal/skills",
+  "lq-skills": ".lq-skills/skills",
+  kevin: ".kevin/skills",
+  "uk-legal": ".uk-legal/skills",
+  "ai-legal": ".ai-legal/skills",
+  "ukummar-legal": ".ukummar-legal/skills",
 };
 
 const suggestedSearches = [
