@@ -189,12 +189,6 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "UK Legal",
     active: "bg-gradient-to-r from-blue-700 to-blue-500 text-white shadow-lg shadow-blue-500/25",
   },
-  "ai-legal": {
-    badge: "border-rose-400/50 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/50 dark:text-rose-300",
-    icon: "from-rose-600 to-pink-500",
-    label: "AI Legal",
-    active: "bg-gradient-to-r from-rose-600 to-pink-500 text-white shadow-lg shadow-rose-500/25",
-  },
   "ukummar-legal": {
     badge: "border-amber-400/50 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/50 dark:text-amber-300",
     icon: "from-amber-600 to-orange-500",
@@ -403,7 +397,6 @@ const sourceToPath: Record<string, string> = {
   "lq-skills": ".lq-skills/skills",
   kevin: ".kevin/skills",
   "uk-legal": ".uk-legal/skills",
-  "ai-legal": ".ai-legal/skills",
   "ukummar-legal": ".ukummar-legal/skills",
   "social-media": ".social-media/skills",
   "aaron-marketing": ".aaron-marketing/skills",

@@ -1,3 +1,8 @@
+---
+name: legal-fetch-samples
+description: "Fetch real, publicly available UK legal documents from the web for testing and analysis"
+---
+
 # Legal Document Fetcher
 
 ## Universal Operating Standard

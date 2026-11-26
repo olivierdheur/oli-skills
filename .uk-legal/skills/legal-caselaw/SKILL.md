@@ -1,3 +1,8 @@
+---
+name: legal-caselaw
+description: "Search, retrieve, and summarize UK case law from Find Case Law (63,000+ judgments, Open Justice Licence)"
+---
+
 # Find Case Law — /legal caselaw
 
 ## Universal Operating Standard

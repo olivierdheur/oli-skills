@@ -1,3 +1,8 @@
+---
+name: legal-report-pdf
+description: "Generate professional branded PDF reports from contract review analysis using Python and ReportLab"
+---
+
 # Professional PDF Report Generator
 
 ## Universal Operating Standard

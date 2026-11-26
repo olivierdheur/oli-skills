@@ -1,5 +1,6 @@
 ---
 name: video-breakdown
+description: "Professional video analysis with quality scoring and shot-by-shot breakdown using Seed-2.0-Mini and Gemini 2.5 Pro"
 version: 2.0.0
 author: "@wells1137"
 tags: ["video", "breakdown", "analysis", "critique", "shot-by-shot", "拉片", "gemini", "bytedance"]

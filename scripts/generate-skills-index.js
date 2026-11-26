@@ -36,7 +36,6 @@ const SKILLS_DIRS = [
   { path: ".lq-skills/skills", source: "lq-skills" },
   { path: ".kevin/skills", source: "kevin" },
   { path: ".uk-legal/skills", source: "uk-legal" },
-  { path: ".ai-legal/skills", source: "ai-legal" },
   { path: ".ukummar-legal/skills", source: "ukummar-legal" },
   { path: ".social-media/skills", source: "social-media" },
   { path: ".aaron-marketing/skills", source: "aaron-marketing" },
