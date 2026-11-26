@@ -17,6 +17,7 @@ const SKILL_SOURCES = [
   { source: 'vercel', path: '.vercel-skills/skills' },
   { source: 'seo', path: '.claude-seo/skills' },
   { source: 'agency', path: '.agency/skills' },
+  { source: 'mattpocock', path: '.mattpocock/skills' },
 ];
 
 console.log('Building oli-skills package...\n');

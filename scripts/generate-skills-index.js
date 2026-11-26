@@ -15,6 +15,7 @@ const SKILLS_DIRS = [
   { path: ".vercel-skills/skills", source: "vercel" },
   { path: ".claude-seo/skills", source: "seo" },
   { path: ".agency/skills", source: "agency" },
+  { path: ".mattpocock/skills", source: "mattpocock" },
 ];
 
 const categoryPatterns = [
