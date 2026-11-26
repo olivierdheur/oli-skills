@@ -123,6 +123,48 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "Phaedra",
     active: "bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white shadow-lg shadow-fuchsia-500/25",
   },
+  productside: {
+    badge: "border-blue-400/50 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/50 dark:text-blue-300",
+    icon: "from-blue-600 to-indigo-500",
+    label: "Productside",
+    active: "bg-gradient-to-r from-blue-600 to-indigo-500 text-white shadow-lg shadow-blue-500/25",
+  },
+  consulting: {
+    badge: "border-slate-400/50 bg-slate-50 text-slate-700 dark:border-slate-500/30 dark:bg-slate-950/50 dark:text-slate-300",
+    icon: "from-slate-600 to-slate-400",
+    label: "Consulting",
+    active: "bg-gradient-to-r from-slate-600 to-slate-400 text-white shadow-lg shadow-slate-500/25",
+  },
+  strategy: {
+    badge: "border-emerald-400/50 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/50 dark:text-emerald-300",
+    icon: "from-emerald-600 to-green-500",
+    label: "Strategy",
+    active: "bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-lg shadow-emerald-500/25",
+  },
+  deallens: {
+    badge: "border-amber-400/50 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/50 dark:text-amber-300",
+    icon: "from-amber-500 to-yellow-500",
+    label: "DealLens",
+    active: "bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/25",
+  },
+  gtm: {
+    badge: "border-pink-400/50 bg-pink-50 text-pink-700 dark:border-pink-500/30 dark:bg-pink-950/50 dark:text-pink-300",
+    icon: "from-pink-500 to-rose-500",
+    label: "GTM",
+    active: "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/25",
+  },
+  finance: {
+    badge: "border-green-400/50 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-950/50 dark:text-green-300",
+    icon: "from-green-600 to-emerald-400",
+    label: "Finance",
+    active: "bg-gradient-to-r from-green-600 to-emerald-400 text-white shadow-lg shadow-green-500/25",
+  },
+  analytics: {
+    badge: "border-cyan-400/50 bg-cyan-50 text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-950/50 dark:text-cyan-300",
+    icon: "from-cyan-500 to-blue-500",
+    label: "Analytics",
+    active: "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -190,6 +232,14 @@ const categoryIcons: Record<string, string> = {
   "Analysis": "📈",
   "ML": "🧠",
   "Engineering": "👨‍💻",
+  "Market Intelligence": "🔍",
+  "Strategy": "🎯",
+  "Finance": "💵",
+  "Consulting": "💼",
+  "Sales": "🤝",
+  "Operations": "⚙️",
+  "Video": "🎬",
+  "Research": "🔬",
   "Specialist": "🎯",
 };
 
@@ -211,6 +261,13 @@ const sourceToPath: Record<string, string> = {
   aws: ".aws/skills",
   owasp: ".owasp/skills",
   phaedra: ".phaedra/skills",
+  productside: ".productside/skills",
+  consulting: ".consulting/skills",
+  strategy: ".strategy/skills",
+  deallens: ".deallens/skills",
+  gtm: ".gtm/skills",
+  finance: ".finance/skills",
+  analytics: ".analytics/skills",
 };
 
 const suggestedSearches = [
@@ -597,7 +654,7 @@ export function SkillsGrid({ skills, onFilteredCountChange }: SkillsGridProps) {
       </div>
 
       {filteredSkills.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredSkills.map((skill, index) => {
             const colors = sourceColors[skill.source as keyof typeof sourceColors] || sourceColors.agents;
             const path = sourceToPath[skill.source] || ".agents/skills";

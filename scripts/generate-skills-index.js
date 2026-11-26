@@ -25,6 +25,13 @@ const SKILLS_DIRS = [
   { path: ".aws/skills", source: "aws" },
   { path: ".owasp/skills", source: "owasp" },
   { path: ".phaedra/skills", source: "phaedra" },
+  { path: ".productside/skills", source: "productside" },
+  { path: ".consulting/skills", source: "consulting" },
+  { path: ".strategy/skills", source: "strategy" },
+  { path: ".deallens/skills", source: "deallens" },
+  { path: ".gtm/skills", source: "gtm" },
+  { path: ".finance/skills", source: "finance" },
+  { path: ".analytics/skills", source: "analytics" },
 ];
 
 // Hierarchical category structure: "Parent > Subcategory"
@@ -38,6 +45,15 @@ const categoryPatterns = [
   
   // Marketing Research (must be before AI > Video to avoid false matches on "video")
   { category: "Marketing > Research", patterns: [/instagram-research/i, /tiktok-research/i, /youtube-research/i, /x-research/i, /content-ideas/i, /content-planner/i, /video-content-analyzer/i, /focus-group/i] },
+  
+  // Business & Strategy (before general patterns)
+  { category: "Business > Market Intelligence", patterns: [/mi-collect/i, /mi-analyze/i, /mi-size/i, /mi-scan/i, /mi-watch/i, /mi-build/i, /mi-fuse/i, /mi-mine/i, /mi-sweep/i, /mi-refresh/i, /osint/i, /finint/i, /techint/i, /humint/i, /sigint/i, /masint/i, /geoint/i, /demoint/i] },
+  { category: "Business > Strategy", patterns: [/strategy/i, /strategic/i, /swot/i, /five.?forces/i, /ansoff/i, /tam.?sam/i, /market.?map/i, /competitive.?intel/i, /war.?gam/i, /100.?day/i, /initiative.?prior/i] },
+  { category: "Business > Finance", patterns: [/valuation/i, /dcf/i, /npv/i, /irr/i, /cash.?flow/i, /unit.?economics/i, /pricing/i, /revenue/i, /margin/i, /profitability/i, /financial/i, /synergy/i, /business.?case/i] },
+  { category: "Business > Consulting", patterns: [/consult/i, /engagement/i, /steering/i, /hypothesis/i, /issue.?tree/i, /mece/i, /recommendation/i, /executive.?summ/i, /board.?paper/i, /decision.?memo/i] },
+  { category: "Business > Sales", patterns: [/sales/i, /deal/i, /prospect/i, /qualification/i, /proposal/i, /pitch/i, /interview.?prep/i, /due.?diligence/i, /battlecard/i] },
+  { category: "Business > Analytics", patterns: [/analytics/i, /cohort/i, /funnel/i, /segmentation/i, /a.?b.?test/i, /metric/i, /dashboard/i, /data.?quality/i, /insight/i, /kpi/i] },
+  { category: "Business > Operations", patterns: [/operation/i, /process/i, /bottleneck/i, /sop/i, /supply.?chain/i, /org.?design/i, /transformation/i, /change.?manage/i] },
   
   // Workflow specifics (before AI patterns)
   { category: "Workflow > General", patterns: [/second-brain/i] },

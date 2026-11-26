@@ -194,8 +194,15 @@
 }
 
 .skill-card-enter {
-  animation: skillCardEnter 400ms var(--ease-out) forwards;
+  animation: skillCardEnter 400ms var(--ease-out) both;
   opacity: 0;
+}
+
+/* Fallback: ensure cards are visible after animation should have completed */
+@supports (animation: none) {
+  .skill-card-enter {
+    animation-fill-mode: forwards;
+  }
 }
 
 @keyframes skillCardEnter {
@@ -309,6 +316,11 @@
   .empty-state {
     animation: none;
     transition: opacity 200ms ease;
+  }
+  
+  .skill-card-enter {
+    opacity: 1;
+    transform: none;
   }
   
   .skill-card:hover,
