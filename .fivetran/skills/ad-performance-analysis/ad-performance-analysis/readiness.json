@@ -1,0 +1,247 @@
+{
+  "metadata": {
+    "app_id": "ad-performance-analysis",
+    "name": "Ad Performance",
+    "version": "1.0.0",
+    "category": "marketing",
+    "hero": "How are your ads actually performing?",
+    "description": "Compare spend, ROAS, CPC, and CTR across your connected ad platforms from Fivetran-synced data, using each platform's reported numbers side by side.\n",
+    "tags": [
+      "ad spend",
+      "ROAS",
+      "CPC",
+      "CTR",
+      "cross-channel",
+      "campaign performance",
+      "marketing analytics"
+    ],
+    "preview_image": "assets/previews/ad_performance_preview.png"
+  },
+  "deployment": {
+    "type": "skill",
+    "skill_id": "ad-performance-analysis",
+    "install": {
+      "claude_code": {
+        "marketplace": "fivetran/skills",
+        "plugin": "ad-performance-analysis@fivetran-skills"
+      }
+    },
+    "capabilities": [
+      { "name": "Cross-Channel Comparison", "description": "Compare each platform's reported ROAS, CPC, and CTR side-by-side" },
+      { "name": "Campaign Drill-Down", "description": "Break performance down by campaign, ad group, or individual ad" },
+      { "name": "Trend Analysis", "description": "Spot week-over-week or month-over-month changes in spend and conversions" },
+      { "name": "Anomaly Detection", "description": "Flag zero-conversion high-spend campaigns, CPC/CTR swings over 20%, and keyword budget concentration" },
+      { "name": "Keyword & Search Analysis", "description": "Surface top-performing and wasteful search terms (where available)" }
+    ],
+    "example_questions": [
+      "Which ad platform gave us the best ROAS last month?",
+      "Compare Google Ads vs Facebook Ads spend and conversions for Q2",
+      "Show me our top 10 keywords by conversion rate on Google Ads",
+      "Which ad groups have a CPC above $5 but a conversion rate below 1%?",
+      "Which campaigns spent over $1K last week with zero conversions?"
+    ]
+  },
+  "scoping": {
+    "require_same_destination": true
+  },
+  "connector_groups": [
+    {
+      "group_id": "ad_platform",
+      "display_name": "Ad Platforms",
+      "description": "At least one ad platform connector is required.",
+      "min_required": 1,
+      "options": [
+        {
+          "service": "google_ads",
+          "display_name": "Google Ads",
+          "required_tables": [
+            { "name": "account_history" },
+            { "name": "account_stats" },
+            { "name": "campaign_history" },
+            { "name": "campaign_stats" },
+            { "name": "ad_group_history" },
+            { "name": "ad_group_stats" },
+            { "name": "ad_history" },
+            { "name": "ad_stats" }
+          ],
+          "recommended_tables": [
+            { "name": "keyword_stats" }
+          ]
+        },
+        {
+          "service": "facebook_ads",
+          "display_name": "Facebook Ads",
+          "required_tables": [
+            { "name": "account_history" },
+            { "name": "campaign_history" },
+            { "name": "ad_set_history" },
+            { "name": "ad_history" },
+            { "name": "basic_ad" },
+            { "name": "basic_ad_actions" },
+            { "name": "basic_ad_action_values" }
+          ]
+        },
+        {
+          "service": "bingads",
+          "display_name": "Microsoft Ads",
+          "required_tables": [
+            { "name": "account_history" },
+            { "name": "account_performance_daily_report" },
+            { "name": "campaign_history" },
+            { "name": "campaign_performance_daily_report" },
+            { "name": "ad_group_history" },
+            { "name": "ad_group_performance_daily_report" },
+            { "name": "ad_history" },
+            { "name": "ad_performance_daily_report" }
+          ]
+        },
+        {
+          "service": "linkedin_ads",
+          "display_name": "LinkedIn Ads",
+          "required_tables": [
+            { "name": "account_history" },
+            { "name": "campaign_group_history" },
+            { "name": "campaign_history" },
+            { "name": "creative_history" },
+            { "name": "ad_analytics_by_campaign" },
+            { "name": "ad_analytics_by_creative" }
+          ]
+        },
+        {
+          "service": "tiktok_ads",
+          "display_name": "TikTok Ads",
+          "required_tables": [
+            { "name": "advertiser" },
+            { "name": "campaign_history" },
+            { "name": "campaign_report_hourly" },
+            { "name": "adgroup_history" },
+            { "name": "adgroup_report_hourly" },
+            { "name": "ad_history" },
+            { "name": "ad_report_hourly" }
+          ]
+        },
+        {
+          "service": "pinterest_ads",
+          "display_name": "Pinterest Ads",
+          "required_tables": [
+            { "name": "advertiser_history" },
+            { "name": "advertiser_report" },
+            { "name": "campaign_history" },
+            { "name": "campaign_report" },
+            { "name": "ad_group_history" },
+            { "name": "ad_group_report" },
+            { "name": "pin_promotion_history" },
+            { "name": "pin_promotion_report" }
+          ]
+        },
+        {
+          "service": "snapchat_ads",
+          "display_name": "Snapchat Ads",
+          "required_tables": [
+            { "name": "ad_account_history" },
+            { "name": "campaign_history" },
+            { "name": "campaign_hourly_report" },
+            { "name": "ad_squad_history" },
+            { "name": "ad_squad_hourly_report" },
+            { "name": "ad_history" },
+            { "name": "ad_hourly_report" },
+            { "name": "creative_history" },
+            { "name": "creative_url_tag_history" }
+          ]
+        },
+        {
+          "service": "amazon_ads",
+          "display_name": "Amazon Ads",
+          "required_tables": [
+            { "name": "profile" },
+            { "name": "campaign_history" },
+            { "name": "campaign_level_report" },
+            { "name": "ad_group_history" },
+            { "name": "ad_group_level_report" },
+            { "name": "product_ad_history" },
+            { "name": "advertised_product_report" }
+          ],
+          "recommended_tables": [
+            { "name": "portfolio_history" }
+          ]
+        },
+        {
+          "service": "twitter_ads",
+          "display_name": "X (Twitter) Ads",
+          "required_tables": [
+            { "name": "account_history" },
+            { "name": "campaign_history" },
+            { "name": "campaign_report" },
+            { "name": "line_item_history" },
+            { "name": "line_item_report" },
+            { "name": "promoted_tweet_history" },
+            { "name": "promoted_tweet_report" },
+            { "name": "tweet" }
+          ]
+        },
+        {
+          "service": "reddit_ads",
+          "display_name": "Reddit Ads",
+          "required_tables": [
+            { "name": "account_report" },
+            { "name": "account_conversions_report" },
+            { "name": "campaign" },
+            { "name": "campaign_report" },
+            { "name": "campaign_conversions_report" },
+            { "name": "ad_group" },
+            { "name": "ad_group_report" },
+            { "name": "ad_group_conversions_report" },
+            { "name": "ad" },
+            { "name": "ad_report" },
+            { "name": "ad_conversions_report" }
+          ]
+        },
+        {
+          "service": "spotify_ads",
+          "display_name": "Spotify Ads",
+          "required_tables": [{ "name": "ad_account" }]
+        },
+        {
+          "service": "apple_search_ads",
+          "display_name": "Apple Search Ads",
+          "required_tables": [
+            { "name": "organization" },
+            { "name": "campaign_history" },
+            { "name": "campaign_report" },
+            { "name": "ad_group_history" },
+            { "name": "ad_group_report" },
+            { "name": "ad_history" },
+            { "name": "ad_level_report" }
+          ]
+        },
+        {
+          "service": "google_search_ads_360",
+          "display_name": "Search Ads 360",
+          "required_tables": [{ "name": "conversion_report" }, { "name": "campaign" }]
+        }
+      ]
+    }
+  ],
+  "quickstart_models": [
+    {
+      "package": "fivetran/ad_reporting",
+      "display_name": "Ad Reporting",
+      "description": "Unified cross-channel ad reporting tables produced by the fivetran/ad_reporting dbt package. When deployed, the skill uses these instead of querying each connector's raw schema separately.\n",
+      "required": false,
+      "applies_to_groups": ["ad_platform"],
+      "required_models": [
+        { "name": "ad_reporting__account_report" },
+        { "name": "ad_reporting__campaign_report" },
+        { "name": "ad_reporting__ad_group_report" },
+        { "name": "ad_reporting__ad_report" }
+      ],
+      "recommended_models": [
+        { "name": "ad_reporting__keyword_report" },
+        { "name": "ad_reporting__search_report" },
+        { "name": "ad_reporting__url_report" },
+        { "name": "ad_reporting__monthly_campaign_country_report" },
+        { "name": "ad_reporting__monthly_campaign_region_report" }
+      ]
+    }
+  ]
+}

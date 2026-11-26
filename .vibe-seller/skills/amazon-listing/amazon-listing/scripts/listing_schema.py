@@ -1,0 +1,770 @@
+"""Flat-file template structure: dialect detection, role resolution,
+header/column parsing, and metadata (required fields, valid values).
+
+Kept as a standalone module (like `marketplace_ids`) so `listing_bulk.py`
+stays within the repo line cap and the "how is this template shaped"
+logic lives in one place. Everything here is pure openpyxl-object /
+string manipulation — no CLI, no I/O.
+
+Amazon ships two flat-file dialects and this module hides the difference
+behind logical roles (see `ROLE_MATCHERS`), so one JSON spec drives
+either:
+
+  legacy  (TemplateType=fptcustom) -- bare field API names: `item_sku`,
+          `update_delete`, `parent_child`, `variation_theme`, ...
+  unified (NGS "Beta Product Spreadsheet") -- decorated names:
+          `contribution_sku#1.value`, `::record_action`,
+          `parentage_level[marketplace_id=<id>]#1.value`, ...
+
+`listing_bulk.py` imports these (aliased to `_`-prefixed internal names)
+and re-exports the ones tests reach for.
+"""
+
+import re
+
+from marketplace_ids import MARKETPLACE_IDS, fulfillment_index
+
+# The Template sheet holds the flat file. Metadata lives in siblings.
+TEMPLATE_SHEET = 'Template'
+DEFN_SHEET = 'Data Definitions'
+VALID_SHEET = 'Valid Values'
+DROPDOWN_SHEET = 'Dropdown Lists'
+
+# The operation ("record action") column and its tokens PER DIALECT. A
+# blank cell means Create in both -- that is the default and cannot be a
+# literal token, so callers pass operation='create' and we clear the cell.
+OP_TOKENS = {
+    'legacy': {
+        'create': '',
+        'update': 'Update',
+        'partialupdate': 'partialupdate',
+        'delete': 'delete',
+    },
+    'unified': {
+        'create': '',
+        'update': 'Create or Replace (Full Update)',
+        'partialupdate': 'Edit (Partial Update)',
+        'delete': 'Delete',
+    },
+}
+
+# Logical field roles, each matched STRUCTURALLY against a header column's
+# API name so one spec drives either dialect. `n` = full API name, `b` =
+# base attribute (marketplace/language brackets, the `#N.sub` suffix and
+# the unified `::` prefix stripped), `lf` = leaf (text after the last `.`).
+# The FIRST header column that matches a role wins (columns are visited in
+# sheet order). Anything not covered here is addressed by exact API name.
+ROLE_MATCHERS = {
+    'sku': lambda n, b, lf: n == 'item_sku' or b == 'contribution_sku',
+    'operation': lambda n, b, lf: n == 'update_delete' or b == 'record_action',
+    'product_type': lambda n, b, lf: (
+        n == 'feed_product_type' or b == 'product_type'
+    ),
+    'brand': lambda n, b, lf: (
+        n == 'brand_name' or (b == 'brand' and lf == 'value')
+    ),
+    'parentage': lambda n, b, lf: n == 'parent_child' or b == 'parentage_level',
+    'parent_sku': lambda n, b, lf: (
+        n == 'parent_sku'
+        or (b == 'child_parent_sku_relationship' and lf == 'parent_sku')
+    ),
+    'variation_theme': lambda n, b, lf: (
+        n == 'variation_theme' or (b == 'variation_theme' and lf == 'name')
+    ),
+    'product_id': lambda n, b, lf: (
+        n == 'external_product_id' or n == 'amzn1.volt.ca.product_id_value'
+    ),
+    'product_id_type': lambda n, b, lf: (
+        n == 'external_product_id_type' or n == 'amzn1.volt.ca.product_id_type'
+    ),
+}
+
+# Cross-dialect attribute renames: a bare spec key on the left resolves to
+# a column whose base attribute is on the right when the two dialects named
+# the same concept differently (legacy `color_name` -> unified `color`).
+FIELD_ALIASES = {
+    'color_name': 'color',
+    'size_name': 'size',
+    # Amazon words some booleans as a question in its own docs while the
+    # column drops the interrogative. An agent copying the label writes
+    # the question form, and the field then vanishes as "not in this
+    # template" -- observed live on a required field, which failed the
+    # whole feed.
+    'are_batteries_required': 'batteries_required',
+    'are_batteries_included': 'batteries_included',
+    'is_batteries_required': 'batteries_required',
+    'is_batteries_included': 'batteries_included',
+}
+
+
+def nearest_columns(name, cols, limit=3):
+    """Columns whose attribute plausibly means *name* -> suggestions.
+
+    A skipped field is a value the author believed they set, and
+    "not in this template" alone sends them reading the whole column
+    list. Containment either way catches the common misses (an
+    interrogative prefix, a decorated vs bare name, a singular/plural)
+    without ever binding the wrong column -- these are SUGGESTIONS, the
+    caller still has to choose.
+    """
+    want = base_attr(name)
+    if not want:
+        return []
+    hits = []
+    for col in cols:
+        got = base_attr(col)
+        if got == want or leaf(col) not in ('value', None, ''):
+            continue
+        if want in got or got in want:
+            hits.append(col)
+    return sorted(set(hits), key=lambda c: (len(c), c))[:limit]
+
+
+def match_fields(term, cols, mkt_id=None):
+    """Columns an `inspect --field TERM` lookup means -> list of names.
+
+    A unified template decorates every name
+    (`generic_keyword[marketplace_id=...][language_tag=...]#1.value`), so an
+    exact lookup of the bare attribute found nothing and the agent guessed
+    spellings one call at a time. Exact name first, then the base
+    attribute, then any column containing the term.
+    """
+    if term in cols:
+        return [term]
+    want = base_attr(term)
+    names = [c for c in cols if base_attr(c) == want] or [
+        c for c in cols if term.lower() in c.lower()
+    ]
+    if mkt_id:  # one storefront's columns, plus the undecorated ones
+        mkt_id = MARKETPLACE_IDS.get(str(mkt_id).upper(), mkt_id)
+        names = [c for c in names if marketplace_of(c) in (mkt_id, None)]
+    return names
+
+
+_MKT_IN_FIELD_RE = re.compile(r'marketplace_id=(A[0-9A-Z]{8,})')
+
+
+def marketplace_of(name):
+    """The marketplace a decorated field name is scoped to, or None."""
+    m = _MKT_IN_FIELD_RE.search(name or '')
+    return m.group(1) if m else None
+
+
+def base_attr(name):
+    """The bare attribute token of a flat-file field API name.
+
+    Strips the dialect decorations so both dialects reduce to a common
+    key: the unified `::` action prefix, the marketplace/language brackets,
+    and the `#N.subfield` suffix. Examples:
+      `item_sku`                          -> `item_sku`
+      `contribution_sku#1.value`          -> `contribution_sku`
+      `::record_action`                   -> `record_action`
+      `parentage_level[marketplace_id=X]#1.value` -> `parentage_level`
+    """
+    s = str(name).lstrip(':')
+    for ch in ('[', '#'):
+        i = s.find(ch)
+        if i != -1:
+            s = s[:i]
+    return s
+
+
+def leaf(name):
+    """Text after the last `.` of a field API name (the sub-field), e.g.
+    `child_parent_sku_relationship[...]#1.parent_sku` -> `parent_sku`,
+    `variation_theme#1.name` -> `name`. Empty when there is no `.`."""
+    s = str(name)
+    return s.rsplit('.', 1)[-1] if '.' in s else ''
+
+
+def is_sku_field(name):
+    """The identity (SKU) column, in either dialect: legacy `item_sku` or
+    unified `contribution_sku#1.value`."""
+    return name == 'item_sku' or base_attr(name) == 'contribution_sku'
+
+
+def is_op_field(name):
+    """The operation column, in either dialect: legacy `update_delete` or
+    unified `::record_action`."""
+    return name == 'update_delete' or base_attr(name) == 'record_action'
+
+
+class Schema:
+    """Resolves logical field roles to the actual header columns present,
+    so parent/child/offer fields are addressed uniformly across the legacy
+    (fptcustom) and unified (NGS Beta) template dialects.
+
+    `cols` is the {field API name -> [1-based column indices]} map from
+    `field_columns`. `roles` maps a logical role (see `ROLE_MATCHERS`) to
+    the first header column that matched it. `dialect` is 'unified' when the
+    operation column is `::record_action`, else 'legacy'.
+    """
+
+    def __init__(self, cols):
+        self.cols = cols
+        self.roles = {}
+        for name in cols:
+            b, lf = base_attr(name), leaf(name)
+            for role, match in ROLE_MATCHERS.items():
+                if role not in self.roles and match(name, b, lf):
+                    self.roles[role] = name
+        op = self.roles.get('operation', '')
+        self.dialect = (
+            'unified' if base_attr(op) == 'record_action' else 'legacy'
+        )
+
+    def field(self, role):
+        """The header field API name bound to a role, or None."""
+        return self.roles.get(role)
+
+    def op_tokens(self):
+        return OP_TOKENS[self.dialect]
+
+    def resolve_field(self, name, mkt_id=None):
+        """Map a spec `fields` key to the actual header column.
+
+        A spec written with a bare/undecorated attribute name (e.g.
+        `item_name`, `product_description`, `recommended_browse_nodes`)
+        must reach the unified template's decorated column
+        (`item_name[marketplace_id=X][language_tag=Y]#1.value`). Resolution
+        order: an EXACT column always wins (so legacy specs and explicit
+        decorated names are untouched); else the first column with the same
+        base attribute, preferring a scalar `.value` leaf; else a known
+        cross-dialect rename (`color_name`->`color`); else the name
+        unchanged (the caller then warns it is not in this template).
+        """
+        if name in self.cols:
+            return name
+        base = base_attr(name)
+        alias = FIELD_ALIASES.get(base)
+        # A key that NAMES a marketplace may only reach that
+        # marketplace's columns. Without this, a spec key decorated for
+        # a marketplace the template does not carry fell back to the
+        # first column with the same base attribute -- another
+        # storefront's -- and wrote one marketplace's value into the
+        # other's cell. Observed live: an AE-decorated `list_price`
+        # currency landed 'AED' in the SA currency column. Better to
+        # report the key as skipped (the caller warns and suggests)
+        # than to silently write it somewhere else.
+        want_mkt = marketplace_of(name)
+        for target in (base, alias):
+            if not target:
+                continue
+            cands = [c for c in self.cols if base_attr(c) == target]
+            if want_mkt:
+                cands = [c for c in cands if marketplace_of(c) == want_mkt]
+            elif mkt_id:
+                # A bare name means the marketplace being filled. Without
+                # this, `item_name` on a two-marketplace template took the
+                # first column -- SA's -- on an AE fill, while the bullet
+                # list beside it (repeat_slots) went to AE.
+                cands = [
+                    c for c in cands if marketplace_of(c) in (mkt_id, None)
+                ] or cands
+            if cands:
+                val = [c for c in cands if leaf(c) == 'value']
+                return (val or cands)[0]
+        return name
+
+
+def our_price_col(cols, mkt_id):
+    """The `our_price ... value_with_tax` offer column for a marketplace.
+
+    Found structurally so it matches BOTH the legacy
+    `purchasable_offer[marketplace_id=X]#1.our_price#1.schedule#1.value_with_tax`
+    and the unified `...[marketplace_id=X][audience=ALL]#1.our_price...`
+    column -- the `[audience=ALL]` insert is why a fixed template string
+    can't be used. Returns the column name or None.
+    """
+    if not mkt_id:
+        return None
+    for name in cols:
+        if (
+            f'marketplace_id={mkt_id}]' in name
+            and '.our_price' in name
+            and name.endswith('value_with_tax')
+        ):
+            return name
+    return None
+
+
+def find_header_row(ws, max_scan=8):
+    """Return the 1-based row index whose cells carry field API names.
+
+    Identified structurally by the presence of the SKU column (`item_sku`
+    legacy or `contribution_sku#1.value` unified), so it works regardless of
+    console language (the label row above it is localised; this row is not)
+    AND regardless of template dialect / header depth (legacy row 3, unified
+    row 5).
+    """
+    for r in range(1, max_scan + 1):
+        if any(is_sku_field(str(c.value)) for c in ws[r] if c.value):
+            return r
+    raise ValueError(
+        'could not find the field-name row (no SKU column -- item_sku or '
+        f'contribution_sku -- in the first {max_scan} rows) -- is this a '
+        'listing flat-file template?'
+    )
+
+
+def data_start_row(ws, header_row):
+    """The 1-based row where DATA must begin.
+
+    Legacy: immediately below the field-name row (`header_row + 1`).
+    Unified: the row-1 `settings=…&dataRow=N&…` blob names N, and Amazon
+    treats the rows between the field-name row and N as a prefilled EXAMPLE
+    region that it SKIPS on upload. Writing data into that gap silently
+    drops those SKUs (verified live: children in rows 6-7 were skipped, so a
+    6-child feed processed as 4/6). Honour `dataRow` so every row is read.
+    """
+    settings = ws.cell(row=1, column=1).value
+    if settings:
+        m = re.search(r'dataRow=(\d+)', str(settings))
+        if m:
+            n = int(m.group(1))
+            if n > header_row:
+                return n
+    return header_row + 1
+
+
+def field_columns(ws, header_row):
+    """Map field API name -> list of 1-based column indices.
+
+    Repeated fields (bullet_point1..N are distinct, but some templates
+    reuse a bare name across marketplace-scoped offer blocks) map to
+    multiple columns; the first is used for scalar writes.
+    """
+    cols = {}
+    for cell in ws[header_row]:
+        name = cell.value
+        if name:
+            cols.setdefault(str(name), []).append(cell.column)
+    return cols
+
+
+def load_required_fields(wb):
+    """Field API names marked Required in the Data Definitions sheet.
+
+    Header at Excel row 2, then per-field rows. The `Field Name` and
+    `Required?` COLUMN POSITIONS differ by dialect (legacy has an extra
+    `Definition and Use` column, so `Required?` is col 6; unified drops it,
+    so it's col 5), so locate both by header name rather than a fixed
+    index. Only an exact `Required` counts -- `Conditionally Required` and
+    `Optional` are not hard requirements.
+    """
+    if DEFN_SHEET not in wb.sheetnames:
+        return set()
+    ws = wb[DEFN_SHEET]
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 3:
+        return set()
+    hdr = [str(c).strip().lower() if c is not None else '' for c in rows[1]]
+
+    def col(*needles):
+        for i, h in enumerate(hdr):
+            if any(n in h for n in needles):
+                return i
+        return None
+
+    fn_i, req_i = col('field name'), col('required')
+    if fn_i is None or req_i is None:
+        return set()
+    required = set()
+    for row in rows[2:]:
+        if not row or len(row) <= max(fn_i, req_i):
+            continue
+        field_name, req = row[fn_i], row[req_i]
+        if field_name and req and str(req).strip().lower() == 'required':
+            required.add(str(field_name).strip())
+    return required
+
+
+def load_valid_values(wb):
+    """Map field API name -> set of accepted enum tokens (lowercased).
+
+    Read from 'Dropdown Lists', whose field-name header row (found by
+    probing for the operation column of either dialect) holds field API
+    names as column headers and the rows below hold the tokens for each.
+    Returns {} silently if the sheet is absent or shaped unexpectedly --
+    enum checks then degrade to warnings only.
+    """
+    if DROPDOWN_SHEET not in wb.sheetnames:
+        return {}
+    ws = wb[DROPDOWN_SHEET]
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 4:
+        return {}
+    # The field-name header inside Dropdown Lists is the row that
+    # contains a known enum field; probe the first few rows for it.
+    hdr_idx = None
+    for i in range(min(5, len(rows))):
+        if rows[i] and any(is_op_field(str(c)) for c in rows[i] if c):
+            hdr_idx = i
+            break
+    if hdr_idx is None:
+        return {}
+    hdr = rows[hdr_idx]
+    out = {}
+    for ci, name in enumerate(hdr):
+        if not name:
+            continue
+        vals = set()
+        for ri in range(hdr_idx + 1, len(rows)):
+            v = rows[ri][ci] if ci < len(rows[ri]) else None
+            if v not in (None, ''):
+                vals.add(str(v).strip().lower())
+        if vals:
+            out[str(name).strip()] = vals
+    return out
+
+
+def valid_value_case(wb):
+    """Map field API name -> {lowercased token: template's exact-case token}.
+
+    Amazon rejects a case-mismatched enum on some fields (verified live:
+    `apparel_size_system` accepts `UAE/KSA` but rejects `uae/ksa`), so a
+    spec value must be written in the template's own case. This mirrors
+    `load_valid_values` but keeps the original casing as the value.
+    """
+    if DROPDOWN_SHEET not in wb.sheetnames:
+        return {}
+    ws = wb[DROPDOWN_SHEET]
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 4:
+        return {}
+    hdr_idx = None
+    for i in range(min(5, len(rows))):
+        if rows[i] and any(is_op_field(str(c)) for c in rows[i] if c):
+            hdr_idx = i
+            break
+    if hdr_idx is None:
+        return {}
+    out = {}
+    for ci, name in enumerate(rows[hdr_idx]):
+        if not name:
+            continue
+        m = {}
+        for ri in range(hdr_idx + 1, len(rows)):
+            v = rows[ri][ci] if ci < len(rows[ri]) else None
+            if v not in (None, ''):
+                m[str(v).strip().lower()] = str(v).strip()
+        if m:
+            out[str(name).strip()] = m
+    return out
+
+
+# Spec shorthands for the offer price -- resolved to the target
+# marketplace's `purchasable_offer[...]` column by `route_offer_price`.
+OFFER_PRICE_SHORTHANDS = ('our_price', 'price', 'standard_price')
+
+
+def route_offer_price(fields, cols, mkt_id, i, sku, warnings):
+    """Route a bare ``our_price`` to the TARGET marketplace's offer column.
+
+    Expands ``our_price``/``price`` into
+    ``purchasable_offer[marketplace_id=<mkt_id>]#1.our_price...``. Explicit
+    full offer columns are left exactly as written (no silent move); we
+    only WARN when the target marketplace ends up with no price -- the
+    "Missing offer / never live" trap. Mutates ``fields``.
+    """
+    target_col = our_price_col(cols, mkt_id)
+    shorthand = next((k for k in OFFER_PRICE_SHORTHANDS if k in fields), None)
+    if shorthand:
+        if mkt_id is None:
+            raise SystemExit(
+                f'error: row {i} sku={sku} sets a price but the spec has no '
+                f'\'marketplace\' -- add e.g. "marketplace": "SA"'
+            )
+        if target_col is None:
+            raise SystemExit(
+                f'error: row {i} sku={sku}: template has no offer column for '
+                f'marketplace_id={mkt_id} (account may not sell there)'
+            )
+        fields[target_col] = fields.pop(shorthand)
+    if mkt_id is not None and (target_col is None or target_col not in fields):
+        other = [
+            k
+            for k in fields
+            if k.startswith('purchasable_offer[marketplace_id=')
+            and '.our_price' in k
+            and f'marketplace_id={mkt_id}]' not in k
+        ]
+        if other:
+            warnings.append(
+                f'row {i} sku={sku}: offer price is on {other[0]} but you are '
+                f'listing on marketplace_id={mkt_id}, which has NO offer -- '
+                f'the listing will be "Missing offer" (never live). Use '
+                f'"our_price".'
+            )
+    # Fulfillment/stock is NOT marketplace-bracketed: each
+    # `fulfillment_availability#N` group is tied by position to one
+    # marketplace's offer block. Route a bare `quantity` + normalise any
+    # `fulfillment_availability#k.*` to the TARGET marketplace's index, so
+    # stock can't land on the wrong marketplace (SA offer + AE qty = dead).
+    if mkt_id is not None:
+        n = fulfillment_index(cols, mkt_id)
+        if n is not None:
+            if 'quantity' in fields:
+                fields[f'fulfillment_availability#{n}.quantity'] = fields.pop(
+                    'quantity'
+                )
+            # A bare `fulfillment_channel_code` routes to the SAME target
+            # group as the quantity: a fulfillment group needs BOTH a
+            # quantity AND a channel code, so a bare code left unrouted
+            # would leave the target group with stock but no channel ->
+            # Amazon's "does not have enough values" rejection.
+            if 'fulfillment_channel_code' in fields:
+                fields[
+                    f'fulfillment_availability#{n}.fulfillment_channel_code'
+                ] = fields.pop('fulfillment_channel_code')
+            for k in list(fields):
+                if k.startswith('fulfillment_availability#') and '.' in k:
+                    tgt = f'fulfillment_availability#{n}.{k.split(".", 1)[1]}'
+                    if tgt != k:
+                        fields[tgt] = fields.pop(k)
+            # Guard the exact cross-marketplace trap: a target group with a
+            # quantity but no channel code is DOA. fill can't invent the
+            # code (it is marketplace/channel-specific), so warn loudly.
+            qty_key = f'fulfillment_availability#{n}.quantity'
+            code_key = f'fulfillment_availability#{n}.fulfillment_channel_code'
+            if fields.get(qty_key) not in (None, '') and fields.get(
+                code_key
+            ) in (None, ''):
+                warnings.append(
+                    f'row {i} sku={sku}: fulfillment group #{n} '
+                    f'(marketplace_id={mkt_id}) has a quantity but no '
+                    f'fulfillment_channel_code -- Amazon rejects the offer '
+                    f'("does not have enough values"). Add a bare '
+                    f'"fulfillment_channel_code" (the merchant/default code '
+                    f'for THIS marketplace) to the row.'
+                )
+
+
+# Operations this tool refuses to write. Both cost a listing permanently and
+# neither is visible in the feed report, which answers each with a clean
+# success:
+#
+# * `delete` -- on a unified account (MENA: SA / AE) a seller SKU is
+#   ACCOUNT-scoped, so a Delete uploaded on one storefront removed the SKU
+#   from every marketplace it sold on (an AE-only delete of a family's
+#   three children also deleted them on SA). And a deleted SKU can never
+#   be used again: re-creating it lists fine, but publishing it as an FBA
+#   offer is refused ("seller SKU already exists, even if the product that
+#   used it was deleted"), so the whole family had to be
+#   rebuilt under new SKUs.
+# * `update` -- a full replace: every attribute the row leaves blank is
+#   CLEARED on the live listing. Editing existing copy is what
+#   `partialupdate` is for; it changes only the fields the row carries.
+#
+# Taking a listing down is a human decision made in Seller Central, not a
+# row an agent writes. A full update is refused unless the run opts in
+# with `--ops update`, which a task passes only when the user asked for a
+# full update by name (e.g. to re-list SKUs they deleted by hand).
+DISABLED_OPS = {
+    'update': (
+        'a full update CLEARS every attribute the row leaves blank on the '
+        "live listing. Use operation 'partialupdate' -- it changes only the "
+        'fields the row carries.'
+    ),
+    'delete': (
+        'a delete removes the SKU from EVERY marketplace of a unified '
+        'account, and a deleted SKU can never be used as an FBA offer '
+        'again. This tool does not delete listings: stop and tell the user '
+        'which SKUs they would have to remove by hand in Seller Central.'
+    ),
+}
+
+
+# The disabled operations a run may opt back into. Delete never.
+OPT_IN_OPS = frozenset({'update'})
+
+
+def resolve_operation(op, dialect, allowed=()):
+    """(token, key) for a spec operation; refuse a disabled one.
+
+    ``allowed`` is the run's ``--ops``: a disabled operation passes only
+    when it is opt-in-able and the run named it.
+    """
+    tokens = OP_TOKENS[dialect]
+    key = (op or 'create').strip().lower()
+    opted = {a.strip().lower() for a in allowed or ()} & OPT_IN_OPS
+    if key in DISABLED_OPS and key not in opted:
+        raise SystemExit(
+            f"error: operation '{op}' is disabled -- {DISABLED_OPS[key]}"
+        )
+    if key not in tokens:
+        raise SystemExit(
+            f"error: operation '{op}' is not one of {', '.join(tokens)}"
+        )
+    return tokens[key], key
+
+
+# Every key `row_fields` (and the callers around it) actually consumes
+# on a spec ROW. Anything else is a key that will be silently ignored —
+# which is how a row-level `product_type` went out as an empty column
+# and cost a whole upload cycle — so `fill` names the strays instead.
+KNOWN_ROW_KEYS = frozenset({
+    'fields',
+    'sku',
+    'operation',
+    'asin',
+    'external_product_id',
+    'external_product_id_type',
+    'parent_sku',
+    'parentage',
+    'variation_theme',
+    'product_type',
+    'brand',
+    'quantity',
+    'fulfillment_channel_code',
+    'mint_new_asin',
+    *OFFER_PRICE_SHORTHANDS,
+})
+
+
+def stray_row_keys(spec_row):
+    """Row keys `fill` will ignore — they belong inside `fields`."""
+    return sorted(k for k in spec_row if k not in KNOWN_ROW_KEYS)
+
+
+def row_fields(spec_row, top, schema):
+    """Flatten one spec row into {field_api_name: value}.
+
+    Friendly per-row keys (sku, asin, parent_sku, parentage,
+    variation_theme, product_type, brand) fold into their flat-file field
+    names -- resolved through `schema` so the SAME spec drives either
+    dialect; `fields` carries everything else verbatim by API name.
+    Top-level `product_type` / `brand` are the default when a row omits
+    them, and a ROW may override.
+
+    `product_type` used to be read from the top level ONLY, so a spec
+    that put it on each row -- the obvious shape, and what an agent
+    wrote live -- had it silently dropped: the column went out empty and
+    Amazon rejected the whole feed with 90041 "product_type#1.value is
+    always required". An hour of feed latency to learn that a value the
+    spec plainly carried was never written.
+    """
+    out = dict(spec_row.get('fields') or {})
+
+    def put(role, value, overwrite=True):
+        name = schema.field(role)
+        if name and value not in (None, ''):
+            if overwrite or name not in out:
+                out[name] = value
+
+    put(
+        'product_type',
+        spec_row.get('product_type') or top.get('product_type'),
+        overwrite=False,
+    )
+    put('brand', spec_row.get('brand') or top.get('brand'), overwrite=False)
+    put('sku', spec_row.get('sku'))
+    put('parent_sku', spec_row.get('parent_sku'))
+    put('parentage', spec_row.get('parentage'))
+    put('variation_theme', spec_row.get('variation_theme'))
+    # A legacy variation row MUST carry relationship_type or a child errors
+    # "relationship_type = null" and never creates (explicit wins). The
+    # unified template has no such column -- the parent link is carried by
+    # parentage_level + child_parent_sku_relationship -- so only add it when
+    # the template actually has a `relationship_type` column.
+    if (spec_row.get('parentage') or spec_row.get('variation_theme')) and (
+        'relationship_type' in schema.cols
+    ):
+        out.setdefault('relationship_type', 'Variation')
+    if spec_row.get('asin'):
+        put('product_id', spec_row['asin'])
+        put('product_id_type', 'asin', overwrite=False)
+    # The flat-file's own names work at row level too. The mint guard's
+    # error suggested exactly this spelling, and it was silently ignored
+    # unless nested under `fields` -- an agent spent six steps finding out.
+    put('product_id', spec_row.get('external_product_id'), overwrite=False)
+    put(
+        'product_id_type',
+        spec_row.get('external_product_id_type'),
+        overwrite=False,
+    )
+    # Offer shorthands (`our_price`/`price`/`quantity`) belong in `fields`,
+    # but the skill tells the agent to put "a bare our_price/quantity on
+    # each child" -- naturally read as a ROW-LEVEL key. Fold those from the
+    # row into fields (a value already in `fields` wins) so the price/stock
+    # routes to the target marketplace either way, instead of being
+    # silently dropped -> an empty offer column the agent then hand-picks.
+    for k in (*OFFER_PRICE_SHORTHANDS, 'quantity', 'fulfillment_channel_code'):
+        if spec_row.get(k) not in (None, '') and k not in out:
+            out[k] = spec_row[k]
+    # Drop keys with no value so we never blank an intended default.
+    return {k: v for k, v in out.items() if v not in (None, '')}
+
+
+_SLOT_RE = re.compile(r'#(\d+)\.')
+
+
+def slot_index(name):
+    """The `#N` ordinal of a repeated column (`…#3.value` -> 3)."""
+    m = _SLOT_RE.search(name)
+    return int(m.group(1)) if m else 1
+
+
+def repeat_slots(schema, name, mkt_id=None):
+    """Ordered `.value` columns for a repeated field, `#1` first.
+
+    Scoped to ONE marketplace when the columns are marketplace-decorated,
+    so spreading a list can never spill into another storefront's block.
+    """
+    base = base_attr(name)
+    alias = FIELD_ALIASES.get(base)
+    for target in (base, alias):
+        if not target:
+            continue
+        cands = [
+            c
+            for c in schema.cols
+            if base_attr(c) == target and leaf(c) == 'value'
+        ]
+        if mkt_id:
+            scoped = [c for c in cands if f'marketplace_id={mkt_id}' in c]
+            bare = [c for c in cands if 'marketplace_id=' not in c]
+            cands = scoped or bare or cands
+        if cands:
+            return sorted(cands, key=slot_index)
+    return []
+
+
+def expand_repeats(fields, schema, mkt_id):
+    """Spread a LIST value across a repeated field's #1..#N columns.
+
+    `bullet_point` is five separate columns (`…#1.value` … `…#5.value`),
+    but `resolve_field` answers with one, so a spec that naturally says
+    ``"bullet_point": ["a", "b", ...]`` used to land entirely in #1 —
+    and a newline-joined string landed there too, which the TSV export
+    then broke into extra rows that upload as garbage SKUs. Observed
+    live: an agent lost eight steps unpicking that before hand-writing
+    the five decorated column names itself.
+
+    Returns ``(fields, warnings)``; a non-list value is untouched.
+    """
+    out, warns = {}, []
+    for name, value in fields.items():
+        if not isinstance(value, list | tuple):
+            out[name] = value
+            continue
+        slots = repeat_slots(schema, name, mkt_id)
+        if len(slots) < 2:
+            # Not a repeated field in THIS template — keep the first
+            # value rather than writing a Python list into a cell.
+            out[schema.resolve_field(name, mkt_id)] = value[0] if value else ''
+            if len(value) > 1:
+                warns.append(
+                    f'{name} got {len(value)} values but this template '
+                    f'has {len(slots) or 1} column for it -- kept the '
+                    'first, dropped the rest'
+                )
+            continue
+        for col, val in zip(slots, value, strict=False):
+            out[col] = val
+        if len(value) > len(slots):
+            warns.append(
+                f'{name} got {len(value)} values but the template has '
+                f'{len(slots)} slots -- dropped {len(value) - len(slots)}'
+            )
+    return out, warns

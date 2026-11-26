@@ -1,0 +1,787 @@
+#!/usr/bin/env python3
+"""Amazon Ads bulk-sheet analysis + edit tool (Sponsored Products).
+
+Reads a `Download campaigns` bulk export (XLSX) and either summarises it
+(for an ad-tuning report) or emits an upload-ready sheet that CREATEs a
+new manual-keyword campaign or UPDATEs bids on existing keywords.
+
+Why this exists
+---------------
+The click-through create/tune path is slow and brittle (kat-* shadow
+components, hover menus, per-field modals). Amazon's own Bulk Operations
+export/import is the supported batch API: download the campaigns sheet,
+edit rows, re-upload. This script is the "edit rows" step.
+
+Locale-generality (this is load-bearing)
+----------------------------------------
+The Sponsored Products sheet has a FIXED 52-column order that is
+identical in every console language; only the sheet *name* and the
+*header text* are localised. So:
+
+  * Columns are addressed by POSITION (see `Col`), never by header text.
+  * The header row is validated against a bilingual dictionary and a
+    warning is printed on mismatch, but parsing never depends on it.
+  * When emitting an upload sheet we CLONE the downloaded workbook's
+    header row and sheet name verbatim, then append data rows. Amazon's
+    upload validator reads that header row, so reusing the exact one the
+    account produced is the only header we know it will accept -- no
+    guessing at localised header strings.
+
+Entity rows are matched by their position in the enum, resolved the same
+way (English name, else any known localised name). Add new localisations
+to `SHEET_NAMES` / `ENTITY` as they are observed.
+
+Safety
+------
+  * New campaigns are emitted `paused` with a caller-supplied daily
+    budget (default minimal) so nothing spends on upload.
+  * Product Ad rows are guarded against the ASIN-as-SKU trap: an ASIN in
+    the SKU field makes Amazon silently drop the whole ad group. If the
+    SKU looks like an ASIN the script refuses (see `looks_like_asin`).
+
+Usage
+-----
+All six subcommands are listed here: this block is the inventory to
+check before hand-parsing a workbook with openpyxl.
+
+  ads_bulk.py inspect        EXPORT.xlsx
+  ads_bulk.py scope          EXPORT.xlsx [--platform amazon --country sa]
+                             # -> JSON {platform, country, total_active,
+                             #    active_ids}: the state=enabled campaign
+                             #    set + its count -- a cross-check for the
+                             #    live rows of CAMPAIGNS.tsv
+  ads_bulk.py clone-campaign EXPORT.xlsx --src "<name>" --new "<name>" \
+                             --sku SELLER-SKU --asin B0XXXXXXXX \
+                             [--daily-budget 1] [--default-bid 0.75] \
+                             [--out OUT.xlsx]
+  ads_bulk.py bid-update     EXPORT.xlsx --campaign "<name>" \
+                             (--scale 0.85 | --set-bid 1.20) \
+                             [--out OUT.xlsx]
+  ads_bulk.py archive-campaign EXPORT.xlsx --campaign "<name>" \
+                             [--out OUT.xlsx]
+  ads_bulk.py negate         EXPORT.xlsx --campaign "<name>" \
+                             --keywords "<term>[,<term>…]" \
+                             [--level adgroup|campaign] \
+                             [--match negativePhrase|negativeExact] \
+                             [--out OUT.xlsx]
+
+Requires: openpyxl.
+"""
+
+import argparse
+import csv
+import datetime
+import json
+import math
+import sys
+
+try:
+    import openpyxl
+except ImportError:
+    sys.exit('error: openpyxl is required (pip install openpyxl)')
+
+
+from ads_schema import (  # noqa: E402  (sibling module, script dir)
+    ENTITY,
+    HEADER_CHECK,
+    NUM_COLS,
+    SHEET_NAMES,
+    STATE_ENABLED,
+    STATE_PAUSED,
+    TARGETING_AUTO,
+    TARGETING_MANUAL,
+    Col,
+    looks_like_asin,
+    match_type_api,
+    state_api,
+)
+
+
+def find_sp_sheet(wb):
+    """Return the Sponsored Products Campaigns worksheet, locale-safe."""
+    for name in SHEET_NAMES:
+        if name in wb.sheetnames:
+            return wb[name]
+    # Fallback: the sheet whose header row is 52 wide.
+    for ws in wb.worksheets:
+        if ws.max_column == NUM_COLS and ws.max_row > 1:
+            return ws
+    sys.exit(
+        'error: could not locate the Sponsored Products sheet '
+        '(known names: {}, none 52-col wide)'.format(', '.join(SHEET_NAMES))
+    )
+
+
+def validate_header(header):
+    """Warn (do not fail) if the positional header looks unexpected."""
+    if len(header) < NUM_COLS:
+        print(
+            f'warning: header has {len(header)} cols, expected '
+            f'{NUM_COLS} -- positional mapping may be wrong',
+            file=sys.stderr,
+        )
+    for idx, accepted in HEADER_CHECK.items():
+        got = str(header[idx]).strip() if idx < len(header) else ''
+        if got not in accepted:
+            print(
+                f'warning: col {idx} header {got!r} not in known set '
+                f'{accepted} (new locale? parsing still positional)',
+                file=sys.stderr,
+            )
+
+
+def load(path):
+    """Load workbook + SP sheet rows (header, data_rows)."""
+    wb = openpyxl.load_workbook(path, data_only=True)
+    ws = find_sp_sheet(wb)
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        sys.exit(f'error: SP sheet {ws.title!r} is empty')
+    header, data = rows[0], [list(r) for r in rows[1:]]
+    validate_header(header)
+    return wb, ws, header, data
+
+
+def is_entity(row, kind):
+    """True if row's Entity cell is any localised name for `kind`."""
+    return str(row[Col.ENTITY]) in ENTITY[kind]
+
+
+def campaign_name_of(row, id_to_name):
+    """Resolve a row's campaign name (child rows use the info column)."""
+    return (
+        row[Col.CAMPAIGN_NAME]
+        or row[Col.CAMPAIGN_NAME_INFO]
+        or id_to_name.get(row[Col.CAMPAIGN_ID])
+    )
+
+
+def build_campaign_index(data):
+    """Map campaign id -> campaign name from Campaign rows."""
+    return {
+        r[Col.CAMPAIGN_ID]: r[Col.CAMPAIGN_NAME]
+        for r in data
+        if is_entity(r, 'campaign')
+    }
+
+
+# --- inspect ------------------------------------------------------------
+def cmd_inspect(args):
+    _wb, ws, _header, data = load(args.file)
+    print(f'sheet: {ws.title}   rows: {len(data)}')
+    counts = {}
+    for r in data:
+        counts[str(r[Col.ENTITY])] = counts.get(str(r[Col.ENTITY]), 0) + 1
+    print('\nentity counts:')
+    for k, v in sorted(counts.items(), key=lambda kv: -kv[1]):
+        print(f'  {k:<24} {v}')
+
+    id_to_name = build_campaign_index(data)
+    print('\ncampaigns:')
+    for r in data:
+        if not is_entity(r, 'campaign'):
+            continue
+        print(
+            f'  {r[Col.CAMPAIGN_NAME]:<45} state={r[Col.STATE]!s:<10} '
+            f'budget={r[Col.DAILY_BUDGET]!s:<6} spend={r[Col.SPEND]!s:<8} '
+            f'sales={r[Col.SALES]!s:<8} acos={r[Col.ACOS]}'
+        )
+
+    # SKU naming scheme (Product Ad rows) -- the §4d canonical source.
+    print('\nProduct Ad SKUs (Entity=Product Ad):')
+    seen = set()
+    for r in data:
+        if is_entity(r, 'product_ad') and r[Col.SKU] not in seen:
+            seen.add(r[Col.SKU])
+            print(
+                f'  camp={campaign_name_of(r, id_to_name)!s:<40} '
+                f'SKU={r[Col.SKU]!s:<24} ASIN={r[Col.ASIN_INFO]}'
+            )
+
+
+# --- shared upload-sheet writer ----------------------------------------
+def blank_row():
+    return [None] * NUM_COLS
+
+
+def write_upload(ws_title, header, out_rows, out_path):
+    """Write an upload workbook: cloned header + Create/Update data rows.
+
+    Reusing the downloaded header row verbatim is what makes the upload
+    locale-robust -- it is the exact header this account's Amazon emits
+    and therefore the only one we know its validator accepts.
+    """
+    out = openpyxl.Workbook()
+    ws = out.active
+    ws.title = ws_title
+    ws.append(list(header))
+    for r in out_rows:
+        ws.append(r)
+    out.save(out_path)
+    print(f'wrote {len(out_rows)} data row(s) -> {out_path}')
+
+
+# --- clone-campaign -----------------------------------------------------
+def cmd_clone_campaign(args):
+    if looks_like_asin(args.sku):
+        sys.exit(
+            f'error: --sku {args.sku!r} looks like an ASIN. The Product Ad SKU '
+            'must be the real seller SKU, or Amazon silently drops '
+            'the entire ad group (mechanics §4b). Pass the seller '
+            'SKU; use --asin for the ASIN column.'
+        )
+
+    _wb, ws, header, data = load(args.file)
+    id_to_name = build_campaign_index(data)
+
+    # Collect the source campaign's TARGETING child rows — keywords
+    # (manual campaigns) AND product-targeting rows (auto campaigns' match
+    # groups: close-match / loose-match / substitutes / complements). We
+    # copy the export's OWN rows verbatim, so the exact match/expression
+    # tokens are whatever this account+locale actually uses — never
+    # hand-invented. That is what lets one command clone both a manual and
+    # an auto campaign (auto was the gap that forced ad-hoc openpyxl before).
+    src_children = []
+    for r in data:
+        if not (is_entity(r, 'keyword') or is_entity(r, 'product_targeting')):
+            continue
+        if campaign_name_of(r, id_to_name) == args.src:
+            src_children.append(r)
+    if not src_children:
+        sys.exit(
+            f'error: no keyword or product-targeting rows found for source '
+            f'campaign {args.src!r} (check the exact name via `inspect`)'
+        )
+
+    # Targeting type is read from the SOURCE CAMPAIGN's own column
+    # (authoritative) — NOT inferred from child rows: SP-Manual-Product
+    # campaigns also carry product-targeting rows, so their presence does
+    # not imply AUTO. Fall back to MANUAL + warn if the source row is absent.
+    _TT = {
+        'AUTO': TARGETING_AUTO,
+        'MANUAL': TARGETING_MANUAL,
+        '自动': TARGETING_AUTO,
+        '手动': TARGETING_MANUAL,
+    }
+    targeting_type = None
+    for r in data:
+        if is_entity(r, 'campaign') and r[Col.CAMPAIGN_NAME] == args.src:
+            key = str(r[Col.TARGETING_TYPE] or '').strip()
+            targeting_type = _TT.get(key.upper(), _TT.get(key))
+            break
+    if targeting_type is None:
+        print(
+            f'warning: source campaign {args.src!r} Targeting Type not found '
+            'in export; defaulting new campaign to MANUAL. Pass a source that '
+            'appears in the export (zero-impression export for paused ones).',
+            file=sys.stderr,
+        )
+        targeting_type = TARGETING_MANUAL
+
+    new = args.new
+    ag = args.ad_group or new
+    paused = STATE_PAUSED  # English API token (Config: enabled|paused)
+    # Start Date is REQUIRED for a Create Campaign row (Config:
+    # SponsoredProductsCreateCampaignRequiredHeaders). Format YYYYMMDD.
+    start_date = args.start_date or datetime.date.today().strftime('%Y%m%d')
+    # Create rows require Campaign Id / Ad Group Id (Config
+    # *CreateRequiredHeaders). For NEW entities these are PLACEHOLDER
+    # ids: Amazon assigns real ids on creation and uses these only to
+    # link parent->child rows within the sheet. Any unique string works;
+    # we reuse the names so the linkage is human-readable.
+    camp_id = new
+    ag_id = ag
+    out_rows = []
+
+    # Campaign
+    c = blank_row()
+    c[Col.PRODUCT] = 'Sponsored Products'
+    c[Col.ENTITY] = ENTITY['campaign'][0]
+    c[Col.OPERATION] = 'Create'
+    c[Col.CAMPAIGN_ID] = camp_id
+    c[Col.CAMPAIGN_NAME] = new
+    c[Col.START_DATE] = start_date
+    c[Col.TARGETING_TYPE] = targeting_type
+    c[Col.STATE] = paused
+    c[Col.DAILY_BUDGET] = args.daily_budget
+    c[Col.BIDDING_STRATEGY] = args.bidding_strategy
+    out_rows.append(c)
+
+    # Ad Group
+    g = blank_row()
+    g[Col.PRODUCT] = 'Sponsored Products'
+    g[Col.ENTITY] = ENTITY['ad_group'][0]
+    g[Col.OPERATION] = 'Create'
+    g[Col.CAMPAIGN_ID] = camp_id
+    g[Col.AD_GROUP_ID] = ag_id
+    g[Col.CAMPAIGN_NAME] = new
+    g[Col.AD_GROUP_NAME] = ag
+    g[Col.STATE] = paused
+    g[Col.AD_GROUP_DEFAULT_BID] = args.default_bid
+    out_rows.append(g)
+
+    # Product Ad (SKU guarded above)
+    p = blank_row()
+    p[Col.PRODUCT] = 'Sponsored Products'
+    p[Col.ENTITY] = ENTITY['product_ad'][0]
+    p[Col.OPERATION] = 'Create'
+    p[Col.CAMPAIGN_ID] = camp_id
+    p[Col.AD_GROUP_ID] = ag_id
+    p[Col.CAMPAIGN_NAME] = new
+    p[Col.AD_GROUP_NAME] = ag
+    p[Col.STATE] = paused
+    p[Col.SKU] = args.sku
+    # ASIN column is informational (the uploader keys on SKU), but write
+    # it when given so the generated sheet is self-documenting / verifiable.
+    if args.asin:
+        p[Col.ASIN_INFO] = args.asin
+    out_rows.append(p)
+
+    # Re-emit each source child row under the new campaign/ad-group.
+    # Keyword rows carry text + match type; product-targeting rows carry
+    # the targeting expression (the auto match group). Bids come from the
+    # source unless overridden. Native-language columns are copied through
+    # so non-Latin text survives the round trip.
+    n_kw = n_tgt = 0
+    for r in src_children:
+        row = blank_row()
+        row[Col.PRODUCT] = 'Sponsored Products'
+        row[Col.OPERATION] = 'Create'
+        row[Col.CAMPAIGN_ID] = camp_id
+        row[Col.AD_GROUP_ID] = ag_id
+        row[Col.CAMPAIGN_NAME] = new
+        row[Col.AD_GROUP_NAME] = ag
+        row[Col.STATE] = paused
+        row[Col.BID] = args.keyword_bid or r[Col.BID]
+        if is_entity(r, 'keyword'):
+            row[Col.ENTITY] = ENTITY['keyword'][0]
+            row[Col.KEYWORD_TEXT] = r[Col.KEYWORD_TEXT]
+            row[Col.NATIVE_LANGUAGE_KEYWORD] = r[Col.NATIVE_LANGUAGE_KEYWORD]
+            row[Col.NATIVE_LANGUAGE_LOCALE] = r[Col.NATIVE_LANGUAGE_LOCALE]
+            # Normalise the export's DISPLAY match token (e.g. 广泛) to the
+            # English API token (broad) the uploader requires.
+            row[Col.MATCH_TYPE] = match_type_api(r[Col.MATCH_TYPE])
+            n_kw += 1
+        else:  # product_targeting — copy the expression verbatim (auto group)
+            row[Col.ENTITY] = ENTITY['product_targeting'][0]
+            row[Col.PRODUCT_TARGETING_EXPR] = r[Col.PRODUCT_TARGETING_EXPR]
+            n_tgt += 1
+        out_rows.append(row)
+
+    print(
+        f'cloning {n_kw} keyword(s) + {n_tgt} product-target(s) from '
+        f'{args.src!r} into new {targeting_type} campaign {new!r} '
+        f'(paused, budget={args.daily_budget}, sku={args.sku})'
+    )
+    out_path = args.out or 'bulk_create_upload.xlsx'
+    write_upload(ws.title, header, out_rows, out_path)
+
+
+# --- bid-update ---------------------------------------------------------
+def _approved_bids(path):
+    """``{(campaign_id, keyword, match_type): [(ad_group, bid), ...]}``
+    for the raise/lower rows of a CHANGES.tsv — each at its own value.
+    The ad group is kept: one keyword can sit in several ad groups of a
+    campaign, and only the named one may move.
+
+    A raise/lower row whose bid is missing, blank or not a number stops
+    the tool naming that row, before anything is written: this is the
+    money path reading an agent-authored file, and a bare traceback was
+    the observed pivot into typing bids into the console by hand."""
+    out = {}
+    with open(path, encoding='utf-8', newline='') as f:
+        for row in csv.DictReader(f, delimiter='\t'):
+            if (row.get('action') or '').strip().lower() not in (
+                'raise',
+                'lower',
+            ):
+                continue
+            key = (
+                str(row.get('campaign_id') or '').strip(),
+                str(row.get('target') or '').strip().lower(),
+                str(row.get('match_type') or '').strip().lower(),
+            )
+            ad_group = str(row.get('ad_group') or '').strip().lower()
+            raw = str(row.get('target_bid') or '').strip()
+            try:
+                bid = float(raw)
+            except ValueError:
+                bid = math.nan
+            if not math.isfinite(bid):
+                sys.exit(
+                    f'error: {key[0]}/{key[1]}: target_bid "{raw}" '
+                    'is not a number'
+                )
+            out.setdefault(key, []).append((ad_group, bid))
+    return out
+
+
+def _keyword_key(r):
+    return (
+        str(r[Col.CAMPAIGN_ID] or '').strip(),
+        str(r[Col.KEYWORD_TEXT] or '').strip().lower(),
+        (match_type_api(r[Col.MATCH_TYPE]) or '').lower(),
+    )
+
+
+def _row_ad_groups(r, ag_names):
+    """The ids/names a keyword row's ad group is known by (lowercased)."""
+    ag_id = str(r[Col.AD_GROUP_ID] or '').strip()
+    names = {ag_id, ag_names.get(ag_id, ''), str(r[Col.AD_GROUP_NAME] or '')}
+    return {n.strip().lower() for n in names if n and n.strip()}
+
+
+def cmd_bid_update(args):
+    from_changes = getattr(args, 'from_changes', None)
+    levers = [args.scale, args.set_bid, from_changes]
+    if sum(v is not None for v in levers) != 1:
+        sys.exit(
+            'error: pass exactly one of --from-changes CHANGES.tsv, '
+            '--scale FACTOR or --set-bid VALUE'
+        )
+    approved = _approved_bids(from_changes) if from_changes else None
+    _wb, ws, header, data = load(args.file)
+    id_to_name = build_campaign_index(data)
+    ag_names = {
+        str(r[Col.AD_GROUP_ID] or '').strip(): str(r[Col.AD_GROUP_NAME] or '')
+        for r in data
+        if is_entity(r, 'ad_group')
+    }
+    copies: dict = {}
+    for r in data:
+        if is_entity(r, 'keyword'):
+            copies[_keyword_key(r)] = copies.get(_keyword_key(r), 0) + 1
+
+    out_rows = []
+    matched = set()
+    for r in data:
+        if not is_entity(r, 'keyword'):
+            continue
+        if args.campaign and campaign_name_of(r, id_to_name) != args.campaign:
+            continue
+        cur = r[Col.BID]
+        if cur in (None, ''):
+            continue
+        if approved is not None:
+            key = _keyword_key(r)
+            wants = approved.get(key)
+            if not wants:
+                continue
+            groups = _row_ad_groups(r, ag_names)
+            hit = [w for w in wants if w[0] and w[0] in groups]
+            if not hit and copies[key] > 1:
+                if any(not w[0] for w in wants):
+                    sys.exit(
+                        f'error: {key[1]!r} ({key[2]}) is in several ad '
+                        f'groups of {key[0]}: name its ad_group in '
+                        'CHANGES.tsv'
+                    )
+                continue
+            if not hit and groups and all(w[0] for w in wants):
+                continue  # this copy is in another ad group
+            want = (hit or wants)[0]
+            matched.add((key, want[0]))
+            new_bid = want[1]
+        elif args.set_bid is not None:
+            new_bid = args.set_bid
+        else:
+            new_bid = round(float(cur) * args.scale, 2)
+        if float(new_bid) == float(cur):
+            continue
+        u = blank_row()
+        u[Col.PRODUCT] = 'Sponsored Products'
+        u[Col.ENTITY] = ENTITY['keyword'][0]
+        u[Col.OPERATION] = 'Update'
+        # Identify the existing keyword by its ids (preferred) + text.
+        u[Col.CAMPAIGN_ID] = r[Col.CAMPAIGN_ID]
+        u[Col.AD_GROUP_ID] = r[Col.AD_GROUP_ID]
+        u[Col.KEYWORD_ID] = r[Col.KEYWORD_ID]
+        u[Col.CAMPAIGN_NAME] = campaign_name_of(r, id_to_name)
+        u[Col.KEYWORD_TEXT] = r[Col.KEYWORD_TEXT]
+        # State is REQUIRED for an Update Keyword row (Config); preserve
+        # the keyword's current state as the API token. Match type
+        # normalised to the API token too.
+        u[Col.STATE] = state_api(r[Col.STATE]) or STATE_ENABLED
+        u[Col.MATCH_TYPE] = match_type_api(r[Col.MATCH_TYPE])
+        u[Col.BID] = new_bid
+        out_rows.append(u)
+
+    wanted = {
+        (key, ag) for key, rows in (approved or {}).items() for ag, _b in rows
+    }
+    if approved is not None and wanted - matched:
+        missing = ', '.join(
+            f'{c}/{ag or "-"}/{k}/{m}'
+            for (c, k, m), ag in sorted(wanted - matched)
+        )
+        sys.exit(f'error: approved rows not found in the export: {missing}')
+    if not out_rows:
+        sys.exit('error: no keyword bids matched / changed')
+    if approved is not None:
+        how = 'from the approved CHANGES.tsv'
+    elif args.scale is not None:
+        how = f'scale x{args.scale}'
+    else:
+        how = f'set={args.set_bid}'
+    print(f'bid update: {len(out_rows)} keyword row(s) {how}')
+    out_path = args.out or 'bulk_bid_update.xlsx'
+    write_upload(ws.title, header, out_rows, out_path)
+
+
+# --- archive-campaign ---------------------------------------------------
+def cmd_archive_campaign(args):
+    """Emit an Archive row for a campaign (Config: Archive Campaign needs
+    only the real Campaign Id). Archiving the campaign cascades to its ad
+    groups / ads / keywords. Use this to disable + clean up a campaign.
+
+    The campaign must exist in the export, so its real Campaign Id can be
+    read. A paused/zero-impression campaign only appears when the export
+    was taken with the zero-impression box checked (see bulk-operations
+    §download)."""
+    _wb, ws, header, data = load(args.file)
+    cid = None
+    for r in data:
+        if is_entity(r, 'campaign') and r[Col.CAMPAIGN_NAME] == args.campaign:
+            cid = r[Col.CAMPAIGN_ID]
+            break
+    if not cid:
+        sys.exit(
+            f'error: campaign {args.campaign!r} not found in the export '
+            '(a paused/zero-impression campaign needs a zero-impression '
+            'export to appear). Check the exact name via `inspect`.'
+        )
+    a = blank_row()
+    a[Col.PRODUCT] = 'Sponsored Products'
+    a[Col.ENTITY] = ENTITY['campaign'][0]
+    a[Col.OPERATION] = 'Archive'
+    a[Col.CAMPAIGN_ID] = cid
+    print(f'archiving campaign {args.campaign!r} (id={cid})')
+    out_path = args.out or 'bulk_archive.xlsx'
+    write_upload(ws.title, header, [a], out_path)
+
+
+def cmd_scope(args):
+    """Print the ACTIVE (state=enabled) Campaign ids in an export.
+
+    Use it to check CAMPAIGNS.tsv: every id printed here should be a row
+    with ``drill_status`` ``drilled`` (or ``blocked`` with a note). With
+    --platform/--country it prints an object carrying ``total_active``
+    (the enabled-row count) next to ``active_ids``; otherwise just the
+    id array.
+    """
+    _wb, _ws, _header, data = load(args.file)
+    active_ids = [
+        str(r[Col.CAMPAIGN_ID]).strip()
+        for r in data
+        if is_entity(r, 'campaign')
+        and state_api(r[Col.STATE]) == STATE_ENABLED
+        and r[Col.CAMPAIGN_ID] not in (None, '')
+    ]
+    active_ids = list(dict.fromkeys(active_ids))  # de-dupe, preserve order
+    if args.platform and args.country:
+        out = {
+            'platform': args.platform,
+            'country': args.country,
+            'total_active': len(active_ids),
+            'active_ids': active_ids,
+        }
+    else:
+        out = active_ids
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+
+
+# Negative match tokens the SP uploader accepts (Config:
+# SponsoredProductsCreateNegativeKeywordMatchTypes). Map friendly/localised
+# inputs to the API token.
+NEG_MATCH_API = {
+    'negativephrase': 'negativePhrase',
+    'negativeexact': 'negativeExact',
+    'phrase': 'negativePhrase',
+    'exact': 'negativeExact',
+    '否定词组': 'negativePhrase',
+    '否定精准': 'negativeExact',
+}
+
+
+# --- negate -------------------------------------------------------------
+def cmd_negate(args):
+    """Emit Negative Keyword rows for an existing SP campaign (the
+    supported way to negate — never scrape the virtualized keyword grid).
+
+    Resolves the campaign id (and ad-group id for ad-group level) from the
+    export by name. Sponsored **Products** only; SB / SB-video negatives
+    live in the SB bulk sheet / console (same bulk-not-scrape principle).
+    """
+    _wb, ws, header, data = load(args.file)
+    id_to_name = build_campaign_index(data)
+    cid = None
+    for r in data:
+        if is_entity(r, 'campaign') and r[Col.CAMPAIGN_NAME] == args.campaign:
+            cid = r[Col.CAMPAIGN_ID]
+            break
+    if not cid:
+        sys.exit(
+            f'error: campaign {args.campaign!r} not found in the export '
+            '(check the exact name via `inspect`).'
+        )
+    agid = None
+    if args.level == 'adgroup':
+        ag_rows = [
+            r
+            for r in data
+            if is_entity(r, 'ad_group')
+            and campaign_name_of(r, id_to_name) == args.campaign
+        ]
+        if args.ad_group:
+            ag_rows = [
+                r for r in ag_rows if r[Col.AD_GROUP_NAME] == args.ad_group
+            ]
+        elif len(ag_rows) > 1:
+            names = ', '.join(
+                sorted({str(r[Col.AD_GROUP_NAME]) for r in ag_rows})
+            )
+            sys.exit(
+                f'error: campaign {args.campaign!r} has multiple ad groups '
+                f'({names}); pass --ad-group to pick one, or --level campaign '
+                'to negate at the campaign level. Refusing to guess.'
+            )
+        if not ag_rows:
+            sys.exit(
+                f'error: no ad group found for {args.campaign!r} '
+                '(needed for ad-group-level negatives; try --level campaign)'
+            )
+        agid = ag_rows[0][Col.AD_GROUP_ID]
+    match = NEG_MATCH_API.get(str(args.match).strip().lower(), args.match)
+    kws = [k.strip() for k in (args.keywords or '').split(',') if k.strip()]
+    if args.keywords_file:
+        with open(args.keywords_file, encoding='utf-8') as f:
+            kws += [ln.strip() for ln in f if ln.strip()]
+    if not kws:
+        sys.exit('error: pass --keywords "a,b,c" or --keywords-file FILE')
+    entity = (
+        'campaign_negative_keyword'
+        if args.level == 'campaign'
+        else 'negative_keyword'
+    )
+    out_rows = []
+    for kw in kws:
+        row = blank_row()
+        row[Col.PRODUCT] = 'Sponsored Products'
+        row[Col.ENTITY] = ENTITY[entity][0]
+        row[Col.OPERATION] = 'Create'
+        row[Col.CAMPAIGN_ID] = cid
+        if args.level == 'adgroup':
+            row[Col.AD_GROUP_ID] = agid
+        row[Col.STATE] = STATE_ENABLED
+        row[Col.KEYWORD_TEXT] = kw
+        row[Col.MATCH_TYPE] = match
+        out_rows.append(row)
+    print(
+        f'negating {len(out_rows)} keyword(s) as {match} at {args.level} '
+        f'level on {args.campaign!r}'
+    )
+    out_path = args.out or 'bulk_negate.xlsx'
+    write_upload(ws.title, header, out_rows, out_path)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    sub = ap.add_subparsers(dest='cmd', required=True)
+
+    p = sub.add_parser('inspect', help='summarise a bulk export')
+    p.add_argument('file')
+    p.set_defaults(func=cmd_inspect)
+
+    p = sub.add_parser(
+        'scope', help='print active Campaign ids (cross-check CAMPAIGNS.tsv)'
+    )
+    p.add_argument('file')
+    p.add_argument('--platform', help='e.g. amazon (emit a full combo obj)')
+    p.add_argument('--country', help='e.g. SA (emit a full combo obj)')
+    p.set_defaults(func=cmd_scope)
+
+    p = sub.add_parser(
+        'clone-campaign',
+        help='emit Create rows for a new campaign (manual OR auto — '
+        "copies the source's keywords or product-targeting groups)",
+    )
+    p.add_argument('file')
+    p.add_argument(
+        '--src',
+        required=True,
+        help='exact source campaign name (its targeting rows are copied; '
+        'manual→keywords, auto→product-targeting groups)',
+    )
+    p.add_argument('--new', required=True, help='new campaign name')
+    p.add_argument('--ad-group', help='ad group name (default: new name)')
+    p.add_argument('--sku', required=True, help='real seller SKU')
+    p.add_argument('--asin', help='ASIN (informational only)')
+    p.add_argument('--daily-budget', type=float, default=1.0)
+    p.add_argument('--default-bid', type=float, default=0.75)
+    p.add_argument(
+        '--keyword-bid', type=float, help='override bid for all cloned keywords'
+    )
+    p.add_argument('--bidding-strategy', default='Dynamic bids - down only')
+    p.add_argument(
+        '--start-date',
+        help='campaign start date YYYYMMDD (required by Amazon; '
+        'default: today)',
+    )
+    p.add_argument('--out')
+    p.set_defaults(func=cmd_clone_campaign)
+
+    p = sub.add_parser('bid-update', help='emit Update rows for bids')
+    p.add_argument('file')
+    p.add_argument('--campaign', help='limit to one campaign name')
+    p.add_argument('--scale', type=float, help='multiply each bid by F')
+    p.add_argument('--set-bid', type=float, help='set every bid to V')
+    p.add_argument(
+        '--from-changes',
+        help='CHANGES.tsv: set each raise/lower row to its own '
+        'target_bid in its own ad_group, and nothing else',
+    )
+    p.add_argument('--out')
+    p.set_defaults(func=cmd_bid_update)
+
+    p = sub.add_parser(
+        'archive-campaign', help='emit an Archive row to disable a campaign'
+    )
+    p.add_argument('file')
+    p.add_argument('--campaign', required=True, help='exact campaign name')
+    p.add_argument('--out')
+    p.set_defaults(func=cmd_archive_campaign)
+
+    p = sub.add_parser(
+        'negate',
+        help='emit Negative Keyword rows for an SP campaign (bulk negation)',
+    )
+    p.add_argument('file')
+    p.add_argument('--campaign', required=True, help='exact campaign name')
+    p.add_argument(
+        '--keywords',
+        help='comma-separated terms to negate (or --keywords-file)',
+    )
+    p.add_argument(
+        '--keywords-file', help='file with one term to negate per line'
+    )
+    p.add_argument(
+        '--match',
+        default='negativePhrase',
+        help='negativePhrase|negativeExact (phrase/exact also accepted)',
+    )
+    p.add_argument(
+        '--level',
+        choices=('adgroup', 'campaign'),
+        default='campaign',
+        help='campaign-level (default) or ad-group-level negative',
+    )
+    p.add_argument('--ad-group', help='ad group name (ad-group level only)')
+    p.add_argument('--out')
+    p.set_defaults(func=cmd_negate)
+
+    args = ap.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

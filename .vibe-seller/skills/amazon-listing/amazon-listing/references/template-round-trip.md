@@ -1,0 +1,396 @@
+# Listing template round trip — download → inspect → fill → upload → feedback
+
+The flat-file template is category-specific: the column set and valid
+values differ per product type, so `inspect` a fresh template before
+filling it. `$S` / `$PY` are defined in SKILL.md § "The scripts".
+
+Contents:
+- 0. The template geometry (two dialects)
+- 1. Download the template (manual path; `bh_download_template.py` does it for you)
+- 2. Inspect
+- 3. The spec (parent + children), parent vs child, the operation column
+- 4. Upload the `.txt` + read the processing report
+- First-upload gotchas
+
+## 0. The template geometry (two dialects — auto-detected)
+
+Amazon ships **two** flat-file templates and `listing_bulk.py` handles
+both; `inspect` prints which (`dialect: legacy` / `dialect: unified`).
+
+**legacy (`TemplateType=fptcustom`)** — the classic flat file, a
+three-row header:
+
+```
+Excel row 1   TemplateType=fptcustom | Version | Signature | group names
+Excel row 2   Local Label Names   (LOCALISED — e.g. "Seller SKU")
+Excel row 3   field API names     (item_sku, update_delete, ...)  <-- keyed
+Excel row 4+  data rows
+```
+
+**unified (NGS "Beta Product Spreadsheet")** — the current Seller Central
+template, a five-row header and PREFILLED example rows:
+
+```
+Excel row 1   settings=feedType=…&labelRow=4&attributeRow=5&dataRow=8…  (signature blob)
+Excel row 2   instructions ("Use ENGLISH … do not delete the colored head")
+Excel row 3   group names (Listing Identity | Variations | …)
+Excel row 4   Local Label Names   (LOCALISED)
+Excel row 5   field API names     <-- keyed
+Excel row 6-7 PREFILLED example SKU + a "do not delete this row" instruction
+Excel row 8+  where the UI expects your data
+```
+
+Every field name in the unified dialect is **decorated**: the SKU is
+`contribution_sku#1.value`, the operation is `::record_action` (tokens
+`Create or Replace (Full Update)` / `Edit (Partial Update)` / `Delete`),
+parentage is `parentage_level[marketplace_id=<id>]#1.value`, the parent
+link is `child_parent_sku_relationship[marketplace_id=<id>]#1.parent_sku`,
+the theme is `variation_theme#1.name`, the brand/title are
+`…[marketplace_id=<id>][language_tag=<tag>]#1.value`, the product id is
+`amzn1.volt.ca.product_id{_type,_value}`, and the offer price carries an
+`[audience=ALL]` insert
+(`purchasable_offer[marketplace_id=<id>][audience=ALL]#1.our_price…`).
+
+`listing_bulk.py` locates the field-name row **structurally** (the row
+carrying the SKU column — `item_sku` OR `contribution_sku`) and resolves
+every friendly role from the header, so the **same spec drives either
+dialect** — never key on a fixed row number or the localised label row.
+
+> **`fill` clears the prefilled example/instruction rows for you.** The
+> unified template ships an example SKU + a "do not delete this row"
+> instruction in the data area. **Produce the upload file with `fill`, not by hand** — a
+> hand-rolled file that appends your SKUs *after* those rows uploads the
+> example + instruction as if they were real SKUs — only the parent then
+> creates, and the junk rows and the children fail. `fill` deletes
+> everything below the field-name
+> row before writing, so only your SKUs ship.
+
+The metadata sheets are the source of truth:
+
+- **`Data Definitions`** — one row per field with `Required?`.
+- **`Valid Values`** / **`Dropdown Lists`** — the accepted enum tokens
+  (e.g. `variation_theme` ∈ {Color, color-size, Size, …}).
+- **`Browse data`** — the valid `recommended_browse_nodes` for the
+  category (a gated set; a guessed node id is rejected).
+
+## 1. Download the template
+
+Seller Central → **Catalogue → Add Products via Upload**
+(`sellercentral.amazon.<tld>/listing/upload` → `/product-search/bulk`).
+Open **Spreadsheet → Download Blank Template → Download Product
+Spreadsheet**, search the product type (e.g. "charger" → **Select**
+the matching type), choose the language, make sure the TARGET
+marketplace's checkbox is ticked, and **Generate Spreadsheet**.
+`bh_download_template.py` (SKILL.md, helper step 1) does all of this and
+reads the tick back; the steps below are for when it can't. The file lands in `~/.vibe-seller/downloads/<slug>/`
+(a macro-enabled `.xlsm`).
+
+> **Leave the other marketplaces' checkboxes as they are.** A bundled
+> multi-marketplace template (e.g. SA + AE) works — `fill` routes the
+> offer and quantity to the target's block — and the `kat-checkbox`
+> state doesn't reliably toggle via clicks or JS, so unticking costs
+> time and buys nothing. Only the target's tick matters (it stamps the
+> template's region).
+>
+> **Coordinate gotcha after a viewport resize:** if you used
+> `Emulation.setDeviceMetricsOverride` (below-fold recipe) to reach the
+> Generate button, every element's `getBoundingClientRect` is now in the
+> NEW tall viewport — **re-read the coordinates after the override**
+> before `click_at_xy`; the pre-resize x/y are stale.
+
+> **The "Generate Spreadsheet" button is usually BELOW the fold** (it sits
+> at the bottom of a tall `kat-popover`, and the Ziniao window is only
+> ~839px tall — `scrollIntoView`/`scrollTo` can't bring it up, so a normal
+> `click_at_xy` can't reach it). Don't reuse a stale template to dodge
+> this. Grow the viewport with CDP, then click: see browser-harness
+> **"A control BELOW the fold that won't scroll into view"** —
+> `cdp("Emulation.setDeviceMetricsOverride", width=1920, height=2400,
+> deviceScaleFactor=1, mobile=False)`, `click_at_xy` the button's
+> `getBoundingClientRect` centre, poll the downloads dir for the new
+> `.xlsm`, then `cdp("Emulation.clearDeviceMetricsOverride")`.
+
+> **Getting TO the product-type search (NGS layout).**
+> On `/product-search/bulk` a right-side **"Choose a template"** panel
+> opens; click the **Download Product Spreadsheet** button under **"List
+> products that are not currently in Amazon's catalog"** (that's the
+> create-new-ASIN card, not "Get Listing Loader", which is for existing
+> ASINs). It opens the **Download Product Spreadsheet** panel at
+> `/product-search/bulk/generate/add-product` (language dropdown +
+> product-type search + store checkboxes + Generate). Locate the button by
+> its label text via the DOM and `click_at_xy` it.
+>
+> **Product-Type search — it's a PLAIN `<input>` + a separate search-icon
+> button, not a shadow-dropdown.** Setting `value` or dispatching
+> input/change does not open a suggestion list (there is none); you must
+> TYPE into it and click the magnifying-glass button beside it:
+>
+> ```bash
+> browser-use <<'PY'
+> import time
+> box = js(r"""var i=document.querySelector('input[placeholder*="Product keyword"]');
+>   if(!i)return null;var r=i.getBoundingClientRect();
+>   return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};""")
+> click_at_xy(box["x"], box["y"])                 # focus the input
+> cdp("Input.insertText", text="charger")         # TRUSTED typing (value= / events don't stick)
+> time.sleep(1)
+> # click the search-icon button just right of the input (find it by position),
+> # then the matched type's **Select** button (the row for your type):
+> print(js(r"""return [].slice.call(document.querySelectorAll('button,kat-button'))
+>   .map(function(b){var r=b.getBoundingClientRect();
+>     return {t:(b.innerText||b.getAttribute('label')||'').trim().slice(0,20),
+>             x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})
+>   .filter(function(e){return e.x>0;});"""))   # → click the search icon, then Select
+> PY
+> ```
+> After **Select**, the right column shows "Product Type Selected: <type>".
+> Then make sure the target store is ticked (the account's home
+> marketplace may be force-checked; that's fine), and click
+> **Generate Spreadsheet** — which is below the fold, so use the CDP
+> viewport-resize recipe above. A fresh `.xlsm` lands in the downloads dir
+> within ~30s. (`cdp("Input.insertText", ...)` needs the element focused
+> first — click it, don't just querySelector it.)
+
+> **The create template generates asynchronously** — "Generate
+> Spreadsheet" does not always land a direct download. If it doesn't
+> appear, use **Download Blank Template** (classic, direct), or collect
+> the generated file from **Check Upload Status** (element id
+> `spreadsheet-upload-status-kat-link`) / the account email.
+
+## 2. Inspect
+
+```bash
+$PY $S/listing_bulk.py inspect ~/.vibe-seller/downloads/<slug>/TEMPLATE.xlsm
+# one field's detail (columns / required / accepted values):
+$PY $S/listing_bulk.py inspect TEMPLATE.xlsm --field variation_theme
+```
+
+Read off: the total/required field counts, the operation column, the
+variation cluster (`parent_child`, `relationship_type`,
+`variation_theme`, `parent_sku`, `external_product_id[_type]`), and the
+required fields with their enums. `brand_name`'s valid values reveal
+the account's **registered brand** — a create must use it (brand-gated).
+
+## 3. The spec (parent + children)
+
+`fill` takes a JSON spec. Top-level `product_type` and `brand` are
+defaults applied to every row. Each row has `sku`, `operation`, and a
+`fields` map keyed by **field API name**; the friendly keys `parentage`,
+`parent_sku`, `variation_theme`, and `asin` fold into their flat-file
+fields.
+
+```json
+{
+  "product_type": "charging_adapter",
+  "brand": "ACME",
+  "marketplace": "SA",
+  "rows": [
+    { "sku": "WIDGET-001", "operation": "create", "parentage": "Parent",
+      "variation_theme": "Color",
+      "fields": { "relationship_type": "Variation",
+                  "item_name": "ACME ...", "product_description": "...",
+                  "recommended_browse_nodes": "<from Valid Values>",
+                  "target_gender": "Male", "department_name": "mens",
+                  "batteries_required": "No", "are_batteries_included": "No" } },
+    { "sku": "WIDGET-001-WHT", "operation": "create", "parentage": "Child",
+      "parent_sku": "WIDGET-001", "variation_theme": "Color",
+      "fields": { "relationship_type": "Variation", "color_name": "White",
+                  "item_name": "ACME ... (White)", "target_gender": "Male",
+                  "age_range_description": "Adult",
+                  "recommended_browse_nodes": "<from Browse data>",
+                  "fulfillment_channel_code": "DEFAULT",
+                  "quantity": "0",
+                  "our_price": "29.00" } }
+  ]
+}
+```
+
+> **`quantity` is the merchant (FBM) stock, so an FBA product takes `0`.**
+> It goes live from FBA stock once the SKU is converted and stock
+> arrives; until then it reads out of stock. A quantity above 0 on
+> `DEFAULT` is a live FBM offer: buyers see it as "International
+> shipping" whenever FBA stock is 0, and converting to FBA does not
+> remove it. `fill` refuses that unless the spec says
+> `"fulfillment": "FBM"` (a seller who really ships it themselves). See
+> `fulfillment-channel.md`.
+
+> **Set the offer price with the bare `our_price` key + a top-level
+> `marketplace` (the country you are listing on, matching the
+> seller-central domain — `amazon.sa` → `"SA"`).** `fill` routes the
+> price into `purchasable_offer[marketplace_id=<that marketplace>]` for
+> you. Don't hand-pick a `purchasable_offer[marketplace_id=…]` column:
+> a multi-marketplace template marks a *different* marketplace's block
+> Required (the account's home marketplace), and a price in the wrong
+> block creates an **ASIN with no live offer** — the listing sits in
+> **"Missing offer"** and never goes live, even though the feed reports
+> success. (Pass `--marketplace SA` to `fill` as an alternative to the
+> top-level key.) Any Amazon country code works (`US`, `UK`, `DE`, `JP`,
+> `AE`, `SA`, …); a raw marketplace id is also accepted. If you omit
+> `marketplace` entirely and the template has offer columns for exactly
+> one marketplace, `fill` auto-detects it from the template — so a
+> marketplace not in the built-in table still works. Omit `main_image_url`
+> when the only image you have is a
+> hotlinked supplier URL. Give each child its category's full required
+> set, not just the differentiator (see the Parent-vs-Child note below).
+
+> **Apparel categories — the full `apparel_size` composite is
+> required on EVERY row, parent included.** An apparel
+> variation only goes live when each row (parent + children) carries the
+> WHOLE size composite — `apparel_size_system`, `apparel_size_class`,
+> `apparel_size`, `apparel_body_type`, `apparel_height_type` — each a
+> valid enum from the template (e.g. system `UAE/KSA`, class `Alpha`,
+> size `One Size`, body/height `Regular`). Miss any one and the report
+> says *"the field 'height_type'/'body_type' for attribute 'Apparel Size'
+> does not have enough values"* (parent) or *"A value is required for
+> apparel_body_type"* (child) — and nothing goes live. `fill` auto-adds
+> `relationship_type: Variation` to every variation row (a child without
+> it errors `relationship_type = null` and never creates), so you don't
+> hand-write it. **A brand-new variation family often needs two passes:**
+> the parent creates first; the children attach on a re-upload. The feed
+> "N/N successful" count is not liveness — confirm on **Manage
+> Inventory** that the parent shows **Variations (N)** and each child has
+> a real ASIN. Read the processing report by opening **Check Upload
+> Status**, screenshotting to find your batch's **Download Processing
+> Summary** button, then `parse-feedback` (it reads the cell-comment
+> errors).
+
+### Parent vs Child — what goes where
+
+- **Parent** row: shared catalogue data only (product type, brand,
+  title, description, `parent_child: Parent`, `relationship_type:
+  Variation`, `variation_theme`). It carries **no** offer, stock,
+  images, colour/size, or product-id — those are child-level.
+- **Child** rows: `parent_child: Child`, `parent_sku` = the parent's
+  SKU, the differentiating attribute (`color_name` / `size_name`), plus
+  the **stock** (bare `quantity` — `fill` routes it to the marketplace's
+  own `fulfillment_availability#N` group) and **price** (bare `our_price`
+  → `purchasable_offer[marketplace_id=…]#1.our_price#1.schedule#1.value_with_tax`,
+  one block per target marketplace).
+
+`fill` knows this: it suppresses child-level required-field warnings on
+a Parent row, and suppresses battery/hazmat required-field warnings when
+the row declares no batteries.
+
+> **Children are not minimal — fill each child's full required set.**
+> Minimal children (only `parent_sku` + colour + offer) get rejected:
+> Amazon requires `item_name`, `target_gender`,
+> `age_range_description`, `apparel_size_system`, and the compound
+> `apparel_body_type` / `apparel_height_type` **on every child row**. So
+> put the shared required attributes on the children too, not just the
+> parent. `fill`'s "missing required field(s)" warnings on child rows
+> are worth heeding, but the authoritative list is what the **processing
+> report** flags per SKU — read it and add exactly those fields.
+> `external_product_id` is the exception: a **GTIN-exempt** brand leaves
+> it blank (set `brand_name`); the feed may still print an `8560` on
+> children, yet the ASINs create under the exemption — verify in
+> inventory, not the feed count.
+
+### The operation column
+
+`operation` maps to the `update_delete` cell: `create`→blank,
+`partialupdate`→`partialupdate`. **`delete` is disabled** and **`update`
+(full replace) is opt-in** — `fill` needs `--ops update` and
+`bh_upload_flatfile.py` needs `ALLOW_FULL_UPDATE=1`, both only when the
+user asked for a full update by name. Every `partialupdate` / `update`
+row must pin its `asin` (see SKILL.md, Operation rules). **Changing a parent-child relationship** is a
+partialupdate: re-submit the child with the new `parent_sku` /
+`variation_theme`.
+
+```bash
+# Write under the store downloads dir: the browser must read
+# the .txt to upload it, and Ziniao's Chrome can't read /tmp.
+$PY $S/listing_bulk.py fill TEMPLATE.xlsm --spec SPEC.json \
+    --out ~/.vibe-seller/downloads/<slug>/out.xlsm
+```
+
+`fill` prints a warning (never fails) for an enum value not in the
+template's valid list, a missing required field, or a field absent from
+this template — so an unseen-but-valid token from a new category still
+uploads. Read the warnings; they are the same errors Amazon would
+reject on.
+
+## 4. Upload the `.txt` + read the processing report
+
+Upload the `.txt` that `fill` wrote, not the `.xlsm` (an openpyxl-saved
+`.xlsm` is rejected 90502 FATAL), from `~/.vibe-seller/downloads/<slug>/`
+so the browser can read it. Use `bh_upload_flatfile.py` (SKILL.md, helper
+step 2): it stages the file through the file-chooser intercept, clicks
+Submit twice, and records the batch. If you have to upload by hand, the
+widget's visible input is a decoy — use the browser-harness skill's
+"Uploading a file", Method 2.
+
+**Submit is two clicks:** the first fires `introspect-feed` (file-type
+detection → green "Product Spreadsheet File (Automatically detected)");
+the second posts the feed (the URL gains `reference_id=`). Confirm staging
+by Submit becoming enabled or the detected banner; the widget's "File
+upload was unsuccessful" shadow text and a red "network error" toast are
+stale. If `click_at_xy` on **Submit products** doesn't register (it sits
+low on the page), a JS `.click()` on that `kat-button` works.
+
+Then fetch this batch's report and verdict it, from the task workspace
+root:
+
+```bash
+SC_HOST=sellercentral.amazon.<tld> BATCH_ID=<id> \
+DOWNLOADS_DIR=~/.vibe-seller/downloads/<slug> \
+browser-use < $S/bh_fetch_report.py
+$PY $S/listing_bulk.py parse-feedback <report__batch<id>> --batch-id <id>
+```
+
+The status page lists many past batches; `bh_fetch_report.py` picks the
+row for your batch id and tags the download with it, so you never parse a
+stale or other-marketplace report.
+
+> **"Parent live, children N/A" (e.g. `1/8`) is a content rejection of the
+> children**, not a browser problem (the file uploaded fine). Read the
+> per-child reasons and fix those fields; a brand-new family often needs a
+> second pass (parent first, children on re-upload).
+
+**Done = the family is in inventory, not "0 errors".** Verify with
+`bh_listing_status.py` (SKILL.md, helper step 4): each SKU has its ASIN and
+the parent row carries the family's parent ASIN. The feed count
+under-reports — records with errors still create stubs, and later
+re-uploads can complete them. See `verification.md`.
+
+### First-upload gotchas (priors, not a checklist)
+
+- **`recommended_browse_nodes`** is a **gated set** per category — a
+  guessed id is rejected. Pick one from the template's `Browse data`
+  sheet. Put it on **every** row (parent + children).
+- **Enum case is exact** (`apparel_size_system` = `UAE/KSA`, not
+  `uae/ksa`). `fill` canonicalises to the template's casing, but if you
+  hand-edit, match the Valid Values sheet exactly.
+- **Compound attributes arrive as a set.** Apparel Size needs
+  `apparel_size_class` + `apparel_size_system` + `apparel_body_type` +
+  `apparel_height_type` together — a partial set errors 99001/99022.
+- **`8560` on a buyable child ("doesn't match any ASINs … include
+  standard_product_id")** — Amazon won't mint a new ASIN. Decide by
+  whether that child's ASIN already exists:
+  - **Exists** (re-submit, or a prior create left a catalog ASIN — a
+    `delete` removes the SKU/offer, **not** the catalog ASIN): **match**
+    it — `operation: create`, `external_product_id` = the ASIN,
+    `external_product_id_type: asin`. This is what lets a stuck variation
+    child join its family (verified fix).
+  - **Genuinely new, GTIN-exempt brand:** leave `external_product_id`
+    blank + set `brand_name`, and fill the **key defining attributes the
+    report names as missing** (e.g. `material_type`, `pattern_name`) so
+    the ASIN can be minted. The exemption alone is not enough. Exemptions
+    are per brand+category+**marketplace**.
+  Set `update_delete` on every row, children included.
+- **Offer/price is per-marketplace; verify in that marketplace's Pricing
+  view.** Fill one offer block —
+  `purchasable_offer[marketplace_id=<MKT>]#1.our_price#1.schedule#1.value_with_tax`
+  (`our_price` is the only price column that matters) + a bare `quantity`
+  for stock. **Stock is per-marketplace but not bracketed** — each
+  `fulfillment_availability#N` group is tied by *position* to one
+  marketplace's offer block, so don't hand-pick `#1`; use bare `quantity`
+  and `fill` routes it to the group adjacent to the target offer. The feed
+  count doesn't reflect price; quantity can apply while Pricing shows `--`
+  if you set a different marketplace's column. On a bundled
+  multi-marketplace template, fill only the intended marketplace's block.
+- **`main_image_url`:** by default not uploaded here (seller adds images)
+  — a `18320` image error is *expected*, not a blocker. Never hotlink a
+  supplier CDN URL (1688/alibaba `cbu01.alicdn.com`, tmall) — Amazon
+  can't fetch a referer-protected image, so the listing is suppressed.
+- Many **battery / lithium / hazmat** fields are marked Required but are
+  only *conditionally* required — leave them blank for a non-battery
+  product (set `batteries_required: No`, `are_batteries_included: No`).

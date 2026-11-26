@@ -1,0 +1,99 @@
+{
+  "metadata": {
+    "app_id": "customer-support-analysis",
+    "name": "Customer Support",
+    "version": "1.0.0",
+    "category": "support",
+    "hero": "How is your support team actually performing?",
+    "description": "Quickly understand how your customer support team is performing day to day, so you can catch problems before they show up in escalations.\n",
+    "tags": [
+      "customer support",
+      "tickets",
+      "resolution time",
+      "first response",
+      "SLA",
+      "CSAT",
+      "agent performance",
+      "Zendesk"
+    ],
+    "preview_image": "assets/previews/zendesk_preview.png"
+  },
+  "deployment": {
+    "type": "skill",
+    "skill_id": "customer-support-analysis",
+    "install": {
+      "claude_code": {
+        "marketplace": "fivetran/skills",
+        "plugin": "customer-support-analysis@fivetran-skills"
+      }
+    },
+    "capabilities": [
+      { "name": "Ticket Volume & Trends", "description": "Tickets created vs solved over time, by channel, priority, type, or group" },
+      { "name": "Resolution Time",        "description": "First reply, first resolution, and full resolution, in business or calendar hours" },
+      { "name": "Backlog Health",         "description": "Open ticket count and aging by priority and assignee" },
+      { "name": "Agent Performance",      "description": "Per-agent volume, resolution time, replies, reopens, and CSAT" },
+      { "name": "SLA Performance",        "description": "Breach rate and time-to-breach by SLA metric" },
+      { "name": "Satisfaction (CSAT)",    "description": "Score distribution and trends by agent and channel" }
+    ],
+    "example_questions": [
+      "What's our average first reply time over the last 30 days, business hours only?",
+      "Who are our top 10 agents by ticket volume this quarter, and how do resolution times compare?",
+      "What's our SLA breach rate this quarter, and which metric is driving it?",
+      "How many tickets are in backlog right now, and what's the priority breakdown?",
+      "How does CSAT distribute by channel?"
+    ]
+  },
+  "scoping": {
+    "require_same_destination": true
+  },
+  "connector_groups": [
+    {
+      "group_id": "zendesk",
+      "display_name": "Zendesk Support",
+      "description": "A Zendesk connector is required.",
+      "min_required": 1,
+      "options": [
+        {
+          "service": "zendesk",
+          "display_name": "Zendesk Support",
+          "required_tables": [
+            { "name": "ticket" },
+            { "name": "ticket_comment" },
+            { "name": "ticket_field_history" },
+            { "name": "ticket_tag" },
+            { "name": "user" },
+            { "name": "group" }
+          ],
+          "recommended_tables": [
+            { "name": "organization" },
+            { "name": "brand" },
+            { "name": "schedule" },
+            { "name": "schedule_holiday" },
+            { "name": "ticket_form_history" },
+            { "name": "ticket_sla_policy" },
+            { "name": "sla_policy_metric_history" }
+          ]
+        }
+      ]
+    }
+  ],
+  "quickstart_models": [
+    {
+      "package": "fivetran/zendesk",
+      "display_name": "Zendesk (dbt)",
+      "description": "dbt models produced by the fivetran/zendesk package. The skill's resolution-time, backlog, agent-performance, and SLA analyses require at minimum zendesk__ticket_enriched and zendesk__ticket_metrics. SLA-specific queries require zendesk__sla_policies; backlog-over-time requires zendesk__ticket_field_history / zendesk__ticket_backlog.\n",
+      "required": false,
+      "applies_to_services": ["zendesk"],
+      "required_models": [
+        { "name": "zendesk__ticket_enriched" },
+        { "name": "zendesk__ticket_metrics" },
+        { "name": "zendesk__ticket_field_history" },
+        { "name": "zendesk__ticket_summary" }
+      ],
+      "recommended_models": [
+        { "name": "zendesk__sla_policies" },
+        { "name": "zendesk__ticket_backlog" }
+      ]
+    }
+  ]
+}

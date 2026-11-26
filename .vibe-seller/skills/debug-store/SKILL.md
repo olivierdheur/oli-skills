@@ -1,0 +1,652 @@
+---
+name: debug-store
+description: "Developer-only skill for poking at vibe-seller stores from outside the task system — inspect the SQLite DB, drive a store's browser-use wrapper directly via the CDP proxy, manage VIBE_TASK_ID for stable sessions, recover wedged daemons, find seller SKUs, and authenticate to the HTTP API with a personal API token (vst_) instead of the JWT cookie path. Load when the user says 'debug a store', 'why is store X broken', 'check the wrapper for store X', 'I need to drive Ziniao directly without creating a task', or anything that touches the runtime store layer outside the normal task → agent flow."
+---
+
+# Debug Store Infrastructure (developer-only)
+
+This is the inside-out view of vibe-seller stores: how to inspect and
+drive the runtime — the database, the browser-use wrapper, the CDP
+proxy, the per-store Ziniao session — *without* going through the task
+system, the web UI, or the JWT-cookie auth wall. For API access, use a
+personal API token (`vst_…`), not the cookie — see "Skipping JWT-cookie
+auth" below.
+
+This is for the platform builder, not for end-user agents running tasks.
+For end-user/agent flows (running campaigns, etc.), see `amazon-ads` and
+`new-product-launch`.
+
+## What you can do without a task
+
+The vibe-seller per-store wrapper is just a shell script that talks to
+a long-running CDP-mux proxy. The wrapper auto-starts the proxy and
+the browser via an internal API call (with a baked-in `ai_bot` JWT,
+so you don't need user creds). All you need is:
+
+1. A fresh `VIBE_TASK_ID` env var (lowercase UUID; first 8 chars must
+   be hex).
+2. The store slug (look it up in `~/.vibe-seller/data/vibe_seller.db` —
+   `stores.name`, then slugify; or just list `~/.vibe-seller/bin/` for
+   the directories that actually exist).
+
+Then `~/.vibe-seller/bin/<slug>/browser-use open <url>` works.
+
+## DB cheatsheet
+
+```bash
+DB=~/.vibe-seller/data/vibe_seller.db
+sqlite3 "$DB" .tables
+sqlite3 "$DB" "SELECT id, name, browser_backend, platforms, countries FROM stores;"
+sqlite3 "$DB" ".schema stores"
+sqlite3 "$DB" "SELECT id, username, email, role FROM users;"
+sqlite3 "$DB" "SELECT store_id, status, current_platform, current_country,
+                      active_tab_count, cdp_port, chrome_pid
+               FROM browser_sessions;"
+sqlite3 "$DB" "SELECT id, status, substr(result,1,120), substr(error,1,120)
+               FROM tasks WHERE created_at > datetime('now','-1 hour')
+               ORDER BY created_at DESC LIMIT 10;"
+```
+
+The `stores` table has no `slug` column — the wrapper directory
+(`~/.vibe-seller/bin/<slug>/`) is where the actual usable name lives.
+`name` in DB is the user-facing label and may differ from the slug
+when names contain spaces / non-ascii. Match by ID when scripting.
+
+The user table is seeded on first boot with two entries:
+
+- a human admin whose username/email/password come from the
+  `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars
+  (defaults: `admin` / `admin@vibe-seller.local` / `admin`). After
+  the first login the user can change these, so don't assume
+  the seeded values are still current — read them from the DB.
+- `ai_bot` (id `00000000-0000-0000-0000-000000000002`, email
+  `ai@vibe-seller.local`, `password_hash='disabled'`) — its JWT is
+  baked into the wrapper for `browser/start` API calls. **Interactive
+  login for `role='ai_bot'` is rejected by `auth.py`**, so don't try
+  to use this account for HTTP API calls. Use it only as the
+  internal-token subject (which the wrapper already does for you) or
+  follow Option A below to create your own admin user.
+
+User-created accounts may also exist alongside these two seeds.
+`password_hash` is bcrypt; the literal `disabled` means the account
+cannot log in regardless of role.
+
+## Wrapper architecture in 30 seconds
+
+Each store has a generated wrapper at `~/.vibe-seller/bin/<slug>/browser-use`.
+The wrapper:
+
+1. Resolves `SESSION` from `VIBE_TASK_ID`:
+   - With `VIBE_TASK_ID` set → `<slug>-<first 8 hex>`
+   - Without → `<slug>` (the global session)
+2. Validates the session name against `^<slug>(-aux|-[0-9a-fA-F]{8})?$`.
+3. Auto-starts the CDP proxy + Ziniao Chrome by calling
+   `POST http://127.0.0.1:7777/api/stores/<store_id>/browser/start`
+   with a hardcoded `ai_bot` JWT. Polls until **that store's** proxy port
+   responds — ports are allocated per store from `_BASE_PROXY_PORT`
+   (9222), so real stores sit on 9223, 9226, 9227… Read the actual port
+   out of the wrapper (`grep -o '127\.0\.0\.1:9[0-9]\{3\}'`) or the
+   `browser_sessions` row; never assume 9222.
+4. Exports `BU_CDP_WS=ws://127.0.0.1:<proxy_port>/client-<VIBE_TASK_ID>`
+   so the browser-use daemon connects through the mux proxy as a unique
+   client. (browser-use 0.13 dropped `--cdp-url` for this env var — the
+   wrapper *rejects* `--cdp-url`, see the blocked-flags list above.)
+5. Execs the real `browser-use` binary with the rest of the args.
+
+The wrapper blocks `--profile`, `--cdp-url`, and `--connect` flags
+because those break the mux. `--headed` is also blocked (managed by
+the wrapper). For non-seller-center pages, use
+`--session <slug>-aux`. **Behavior depends on backend:**
+
+- **Wrapper format v4** — every session carries an EXPLICIT
+  `BU_CDP_WS` (an endpoint-less daemon ambiently attached to a
+  DIFFERENT store's browser — observed live; that class is now
+  unrepresentable). Ziniao stores: `-aux` is the store's DEDICATED
+  login-less Chromium, lazily started via
+  `POST /api/stores/{id}/browser/aux/start` (own CDPMuxProxy, own
+  `downloads/{slug}-aux/` dir, NO seller login — never use it for
+  seller central). Chrome stores: aux is a stable `client-aux` on
+  the main proxy. If an aux session shows another store's account,
+  the wrapper predates v3/v4 — restart the server to regenerate.
+
+## VIBE_TASK_ID — the recurring footgun
+
+A fresh `VIBE_TASK_ID` per real task is what the runtime gives every
+task agent. Outside the task system, **rotate it manually after**:
+
+- Every long pause (> 15 min idle, especially if the user resumed
+  after sleeping for hours).
+- Any time you see `Error: Session '<slug>-<8hex>' is already running
+  with different config.` — means the daemon for that ID has stale
+  CDP config.
+- Any time `browser-use sessions` shows the daemon for your ID with
+  `CONFIG=?` (TTY-detection failure mode).
+- Any time eval calls return `TimeoutError: timed out` or
+  `Client is stopping` — daemon has wedged.
+
+Rotate:
+
+```bash
+NEW="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+echo "export VIBE_TASK_ID='$NEW'" > /tmp/vs_session_env.sh
+. /tmp/vs_session_env.sh
+~/.vibe-seller/bin/<slug>/browser-use sessions
+~/.vibe-seller/bin/<slug>/browser-use open <some-url>
+```
+
+> **A rotated `VIBE_TASK_ID` gets REAPED within 5 minutes — do not use
+> one for manual driving.** `VIBE_TASK_ID=<uuid>` resolves the session to
+> `<slug>-<8hex>`, which is exactly the shape
+> `daemon_reaper.task_prefix_for_bu_name()` reads as *"owned by a task"*.
+> There is no task row for a hand-made UUID, so the 5-minute sweep
+> classifies the daemon as orphaned and kills it. The next `js()` in your
+> heredoc then dies with a bare, undiagnosable traceback —
+> `FileNotFoundError: [Errno 2] No such file or directory` out of
+> `_ipc.connect` — because `ensure_daemon()` runs **once** before
+> `exec(code)` and nothing re-checks the socket mid-script. Confirm with:
+> `grep -i reaped logs/backend_7777.log`
+> → `Reaped 1 orphaned browser-use daemon(s): [(<pid>, '<8hex>')]`.
+>
+> For manual driving use a session the reaper **skips** — one with no
+> task suffix: unset `VIBE_TASK_ID` entirely (session `<slug>`, the
+> global one) or pass `--session <slug>-aux`. Rotation advice above
+> applies to a *wedged* daemon inside a real task, not to your shell.
+
+## Reviving a wedged daemon
+
+```bash
+# 1. List daemons to find the wedged one
+~/.vibe-seller/bin/<slug>/browser-use sessions
+
+# 2. Force-kill (the wrapper's `close` subcommand may itself hang)
+pkill -9 -f "skill_cli.daemon.*<slug>-<8hex>"
+
+# 3. Rotate VIBE_TASK_ID and re-open
+NEW="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+export VIBE_TASK_ID="$NEW"
+~/.vibe-seller/bin/<slug>/browser-use open about:blank
+```
+
+The Ziniao Chrome process and the CDP mux proxy survive daemon kills —
+they're per-store, not per-task. Don't kill them unless you've tried
+everything else.
+
+To verify the CDP proxy is actually responding:
+
+```bash
+# This store's mux port — NOT a fixed 9222 (allocated per store).
+PORT=$(grep -oE '127\.0\.0\.1:9[0-9]{3}' ~/.vibe-seller/bin/<slug>/browser-use | head -1 | cut -d: -f2)
+curl -sf -m 2 --noproxy '*' "http://127.0.0.1:$PORT/json/version"
+ps aux | grep -E "ziniaobrowser" | grep -v grep
+```
+
+`--noproxy '*'` matters: with ClashX/etc. exported, curl sends the
+loopback request to the proxy and you get an empty body instead of a
+connection error — which reads as "the browser is up but broken".
+The mux proxy is an asyncio server **inside** the FastAPI process, so
+`grep cdp_mux_proxy` in `ps` finds nothing even when it is running.
+
+**Wedge signature:** the port accepts the TCP connection and then never
+answers (curl hangs to `-m` timeout, HTTP 000). Distinct from a clean
+"connection refused" — see
+[docs/ziniao-concurrency.md](../../../docs/ziniao-concurrency.md) runbook.
+
+## Skipping JWT-cookie auth
+
+The vibe-seller HTTP API (`/api/tasks`, `/api/stores`, etc.) gates
+everything on a JWT cookie. From a Claude Code shell, you don't have
+that cookie. Use a **personal API token** instead — a `vst_` bearer
+that acts as the user who minted it, with that user's role.
+
+### Option A — an API token (`vst_…`) in `VIBE_SELLER_TOKEN`
+
+The normal path: the human mints an API key in **Settings →
+Integrations → API keys** (the UI shows the plaintext once) and
+exports it:
+
+```bash
+export VIBE_SELLER_TOKEN='vst_…'      # pasted by the human
+export BASE=http://localhost:7777
+
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" "$BASE/api/auth/me"
+```
+
+A token is revocable on its own (`DELETE /api/auth/tokens/{id}`) —
+unlike a JWT, which cannot be revoked without rotating the install's
+secret. Tokens carry the owner's role and permissions: mint one as the
+user whose view you need.
+
+You can also mint one over HTTP, but only with an existing session
+(cookie or token) — see Option A2 for the no-session case:
+
+```bash
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -X POST "$BASE/api/auth/tokens" \
+  -d '{"name":"debug-shell","expires_in_days":1}'
+# → {"id":"…","token":"vst_…","expires_at":"…"}   ← the plaintext, ONCE
+```
+
+`expires_in_days: null` means "never expires"; the default is 90.
+When you are done with a token you minted, revoke it:
+
+```bash
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" \
+  -X DELETE "$BASE/api/auth/tokens/<token_id>"
+```
+
+### Option A2 — bootstrap one session, then mint a short-lived token
+
+Unattended debugging on an **auth-ON** server with no human at the
+keyboard: there is no session to mint a token *with*, so bootstrap the
+stable `taskbot_debug` account **once**, use that one session to mint a
+token that expires in a day, and use the bearer from then on.
+
+```bash
+# 1. Generate password + bcrypt hash
+PW=$(python3 -c "import secrets;print('tmp_'+secrets.token_hex(8))")
+HASH=$(./.venv/bin/python3 -c "from app.password import hash_password;print(hash_password('$PW'))")  # run from repo root
+
+# 2. Upsert the stable debug user (admin role, fixed id + username)
+#    NOTE: every NOT NULL column of `users` must be listed — the model
+#    declares them in Python, so a fresh DB has NO column-level default
+#    for them and the INSERT fails if one is missing. If `users` grows a
+#    new NOT NULL column, add it here too.
+DBG_UID="taskbot-debug"
+NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "INSERT INTO users (id, username, email, password_hash, role, is_active,
+                      plan_mode_default, debug_mode, default_profile_id,
+                      sync_profile_to_schedules, created_at, updated_at)
+   VALUES ('$DBG_UID','taskbot_debug',NULL,'$HASH','admin',1,1,0,'default',0,
+           '$NOW','$NOW')
+   ON CONFLICT(id) DO UPDATE SET
+     password_hash='$HASH', is_active=1, updated_at='$NOW';"
+
+# 3. Login → cookie (used ONCE, to mint the token)
+curl -sf -c /tmp/vs_cookie.txt -H 'Content-Type: application/json' \
+  -X POST http://localhost:7777/api/auth/login \
+  -d "{\"identifier\":\"taskbot_debug\",\"password\":\"$PW\"}" \
+  || { echo "LOGIN FAILED — did step 2 create taskbot_debug?"; exit 1; }
+
+# 4. Mint a token that dies in a day
+TOK_JSON=$(curl -sf -b /tmp/vs_cookie.txt -H 'Content-Type: application/json' \
+  -X POST http://localhost:7777/api/auth/tokens \
+  -d '{"name":"debug-shell","expires_in_days":1}') \
+  || { echo "MINT FAILED — the session has no user, or auth is on and the login failed"; exit 1; }
+export VIBE_SELLER_TOKEN=$(echo "$TOK_JSON" | jq -r .token)
+TOKEN_ID=$(echo "$TOK_JSON" | jq -r .id)
+
+# 5. From here on, the bearer is the credential
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" http://localhost:7777/api/stores
+
+# 6. Cleanup before ending the session — revoke the token AND retire the account
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" \
+  -X DELETE "http://localhost:7777/api/auth/tokens/$TOKEN_ID"
+sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "UPDATE users SET is_active=0 WHERE id='$DBG_UID';"
+rm -f /tmp/vs_cookie.txt
+```
+
+Revoking the token is what actually cuts access — a revoked `vst_` token
+is a **401 even when `auth_required` is off**, so it can never fall back
+to "no auth needed". `is_active=0` blocks future logins for the account.
+The `tasks.created_by` column uses FK = restrict, so the row itself can
+never be deleted once it owns tasks — that's fine, it's one stable row
+across all sessions.
+
+### Option B — drive the wrapper directly (no API auth needed)
+
+If your only goal is to drive a store's browser, you don't need the
+HTTP API at all. The wrapper itself authenticates the
+`browser/start` call with the `ai_bot` JWT baked into the script.
+Just rotate `VIBE_TASK_ID` and call `browser-use open <url>`.
+
+This is the right choice when:
+
+- You're inspecting a single store from outside (debugging, verifying
+  a workflow before turning it into a task).
+- You don't need the per-task workspace isolation.
+- You're OK with sharing the global `<slug>` session (or pinning a
+  per-shell `<slug>-<8hex>` session via `VIBE_TASK_ID`).
+
+This is the WRONG choice when:
+
+- You want isolation across concurrent runs (use real tasks).
+- You need the agent's MCP tools (`vibe_seller_write_workspace_file`,
+  catalog injection, etc.) — those only exist inside a real task.
+
+## Calling the HTTP API
+
+With a token in hand — assume `VIBE_SELLER_TOKEN=vst_…` and
+`BASE=http://localhost:7777` below — every authenticated route is just
+`curl -H "Authorization: Bearer $VIBE_SELLER_TOKEN" "$BASE/<path>"`.
+
+The API surface (full list in `docs/api.md`) breaks into a few groups:
+
+| Group | Common routes | Use for |
+|---|---|---|
+| Auth | `GET /api/auth/me`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET/POST/DELETE /api/auth/tokens` | Who am I; cookie lifecycle; API-token lifecycle |
+| Stores | `GET /api/stores`, `GET /api/stores/<id>`, `POST /api/stores/<id>/browser/start` (`?force=1`), `POST /api/stores/<id>/browser/aux/start` | Store metadata + per-store browser lifecycle |
+| Tasks | `POST /api/tasks`, `GET /api/tasks`, `GET /api/tasks/<id>`, `POST /api/tasks/<id>/messages`, `POST /api/tasks/<id>/stop` | Create / list / inspect / message / stop tasks |
+| Schedules | `GET /api/schedules`, `POST /api/schedules`, `POST /api/schedules/<id>/run` | Cron-style routines |
+| Events | `GET /api/events/stream` (SSE), `GET /api/events/recent` | Live + historical event feed |
+
+> **There is no `browser/stop` route** — stopping is internal only
+> (`BrowserManager.stop_session` / `aux_browser.stop_aux`, called by store
+> deletion and the idle sweeper). To stop one store's env by hand, send
+> Ziniao's own per-store `stopBrowser` with that store's `browser_oauth`;
+> never kill the shared Ziniao client, which would destroy every other
+> store's live browser (see
+> [docs/ziniao-concurrency.md](../../../docs/ziniao-concurrency.md)).
+
+Keys to remember:
+
+- Body is always JSON; set `-H 'Content-Type: application/json'`.
+- All IDs are UUIDs (cookie lookup not exposed in URL).
+- Read endpoints accept `?limit=` / `?status=` filters; check
+  `docs/api.md` for the canonical query shape per route.
+
+### Discover the IDs you need
+
+```bash
+# List stores → pick the one you want by name
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" "$BASE/api/stores" | jq '.[] | {id,name,browser_backend,platforms,countries}'
+
+# List recent tasks for a store
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" "$BASE/api/tasks?store_id=<store_id>&limit=10" \
+  | jq '.[] | {id,title,status,created_at}'
+
+# Inspect a single task
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" "$BASE/api/tasks/<task_id>" | jq
+```
+
+`jq` is optional but makes the JSON readable. The DB cheatsheet
+(`SELECT id, name FROM stores;`) is the offline equivalent — same
+data, no auth needed for read.
+
+## Reproduce what the FRONTEND sends — never an arbitrary profile
+
+When you drive `retry` / `messages` / task-create from curl, you are
+standing in for a user clicking a button. **Read the profile the UI would
+have sent and send exactly that.** The UI initialises its picker from the
+signed-in user's `default_profile_id` (`frontend/src/App.tsx` — on
+auth-check it calls `setSelectedProfileId(u.default_profile_id)`) and
+passes it on every retry.
+
+```bash
+# The profile the UI would send for this user — use THIS, not a guess.
+PROFILE=$(sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "SELECT default_profile_id FROM users WHERE username='<user>';")
+# For a SCHEDULED task, the schedule's own profile is the authority:
+PROFILE=$(sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "SELECT ai_profile_id FROM schedules WHERE id='<schedule_id>';")
+
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" -H 'Content-Type: application/json' \
+  -X POST "$BASE/api/tasks/$TASK_ID/retry" -d "{\"profile_id\":\"$PROFILE\"}"
+```
+
+**Do NOT pass `"default"`, and do NOT omit the field.**
+
+* `"default"` is a REAL profile id, not a "use the configured one" token —
+  it resolves to plain Claude via `api.anthropic.com` (`profiles.json`).
+  Sending it silently swaps the model out from under the run.
+* Omitting `profile_id` does not fall back to the user's default either.
+  `retry_task` does `if body and body.profile_id: task.ai_profile_id = …`,
+  so an absent field leaves the task on **whatever profile its previous
+  run used** — which for a scheduled task can differ from the schedule's.
+
+Why it matters: a debug run on the wrong model answers a question nobody
+asked. Observed — a two-hour ad-audit rerun was driven with
+`profile_id: "default"` while the user's default and the owning schedule
+were both `minimax`. Every infra fix it validated was real, but it proved
+nothing about the model the weekly schedule actually fires under, and the
+divergence was invisible until someone thought to check.
+
+Verify before you conclude anything about behaviour: the task row records
+the profile, and the live agent process shows the resolved endpoint.
+
+```bash
+sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "SELECT ai_profile_id FROM tasks WHERE id='$TASK_ID';"
+# Definitive — a profile with no ANTHROPIC_BASE_URL is plain Claude:
+for p in $(pgrep -f "$TASK_ID"); do
+  ps eww -p "$p" | tr ' ' '\n' | grep -E '^ANTHROPIC_(BASE_URL|MODEL)='
+done
+```
+
+If you deliberately want a different profile (isolating a gate fix from
+model capability, say), that is legitimate — but **say so out loud before
+starting**, because the person watching assumes the UI's behaviour.
+
+## Triggering a task via API
+
+Tasks are the primary unit of agent work. A `POST /api/tasks`
+creates one, and (when `plan_mode=false` — the default) the runtime
+auto-runs it: PENDING → RUNNING → COMPLETED. Plan mode goes through
+DESIGNING / PLANNED first and waits for explicit `/run`.
+
+### Minimal request
+
+```bash
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" -H 'Content-Type: application/json' \
+  -X POST "$BASE/api/tasks" \
+  -d '{
+    "title": "<short imperative — what the agent should do>",
+    "description": "<optional context — country, marketplace, dates>",
+    "store_id": "<store_uuid>",
+    "ai_profile_id": "<profile_id>",
+    "plan_mode": false
+  }'
+```
+
+The response is the new task row including `id`. Save it:
+
+```bash
+TASK_ID=$(curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" -H 'Content-Type: application/json' \
+  -X POST "$BASE/api/tasks" \
+  -d "$(jq -n --arg t "..." --arg d "..." --arg s "$STORE_ID" --arg p "$PROFILE" \
+        '{title:$t,description:$d,store_id:$s,ai_profile_id:$p,plan_mode:false}')" \
+  | jq -r .id)
+echo "$TASK_ID"
+```
+
+### Field reference
+
+| Field | Required | Notes |
+|---|---|---|
+| `title` | yes | Short imperative; this becomes the agent's primary instruction. |
+| `description` | no | Free-form context — country (`NOON EG`, `Amazon US`), date range, prior-task references. |
+| `store_id` | no\* | Required for store-scoped work. Omit for a non-store task; its mode follows `plan_mode` like any task (omitted → the user's Auto/Review default). |
+| `ai_profile_id` | no | On task CREATE this defaults to the user's `default_profile_id`; on `retry` it does NOT — see "Reproduce what the FRONTEND sends" above. Send the user's (or the schedule's) profile explicitly. `"default"` is a real id meaning plain Claude, not "use the configured one". Live list: `app/ai/profiles.py` + `~/.vibe-seller/profiles.json`. |
+| `plan_mode` | no | `false` = auto-run, `true` = plan-then-execute (PENDING → DESIGNING → PLANNED → wait for approval). Omitted: the user's default (`plan_mode_default`); a sub-task runs auto. |
+| `parent_task_id` | no | Chains tasks. The new task inherits store + workspace from the parent. |
+| `schedule_id` | no | Set only when creating a one-off ad-hoc fire of an existing schedule; normal task creation should leave this null. |
+
+### Watching it run
+
+```bash
+# Quick status poll
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" "$BASE/api/tasks/$TASK_ID" \
+  | jq '{status,error,result_len:(.result|length),updated_at}'
+
+# Or tail directly from SQLite (faster, no auth dance)
+sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "SELECT status, length(result), error, datetime(updated_at,'localtime')
+   FROM tasks WHERE id='$TASK_ID'"
+
+# Live event stream (SSE) — every state transition + agent message
+curl -N -H "Authorization: Bearer $VIBE_SELLER_TOKEN" "$BASE/api/events/stream?task_id=$TASK_ID"
+```
+
+Per-message stream from the `task_messages` table is the richest
+view of what the agent is doing — useful when you want to see
+`tool_use` / `thinking` events without the SSE overhead:
+
+```bash
+sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "SELECT datetime(created_at,'localtime'), role, length(content)
+   FROM task_messages WHERE task_id='$TASK_ID'
+   ORDER BY created_at DESC LIMIT 20"
+```
+
+### Sending a follow-up message mid-run
+
+If the agent stalls or you want to redirect it:
+
+```bash
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" -H 'Content-Type: application/json' \
+  -X POST "$BASE/api/tasks/$TASK_ID/messages" \
+  -d '{"content":"<your follow-up — e.g. resume from where the run stalled>"}'
+```
+
+This is the same path the UI uses when the user types in the task
+detail panel. The agent receives the message as a user turn.
+
+### Stopping a runaway task
+
+```bash
+curl -s -H "Authorization: Bearer $VIBE_SELLER_TOKEN" -X POST "$BASE/api/tasks/$TASK_ID/stop"
+```
+
+`stop` flips status → `cancelled` and signals the agent backend to
+terminate. If the daemon doesn't honor it within ~30 s, fall back to
+`pkill -9 -f "skill_cli.daemon.*$TASK_ID"` — and then mark the row
+manually:
+
+```bash
+sqlite3 ~/.vibe-seller/data/vibe_seller.db \
+  "UPDATE tasks SET status='cancelled', error='manual kill', updated_at=datetime('now')
+   WHERE id='$TASK_ID' AND status IN ('running','pending');"
+```
+
+### When NOT to use the API
+
+- **Iterating on a workflow before encoding it as a task** — drive
+  the wrapper directly (Option B above) until the steps are stable.
+- **Smoke-testing a single browser-use command** — no task overhead
+  is justified.
+- **Anything where you'd be staring at a single page of output** —
+  the task system is built for unattended runs; for attended work
+  the wrapper is faster.
+
+## Finding seller SKUs without the catalog
+
+The vibe-seller catalog (`~/.vibe-seller/knowledge/`) is a curated set
+of facts; it does NOT contain a per-product SKU index. To find a
+specific seller-side SKU when you need one (e.g. for bulk-upload Product
+Ad rows):
+
+```bash
+# Get parent SKU for an ASIN — use the inventory page UI
+~/.vibe-seller/bin/<slug>/browser-use open \
+  "https://sellercentral.amazon.com/myinventory/inventory?searchKey=<ASIN>&status=all"
+# The "Parent SKU:" label in the page text is the parent SKU.
+
+# Get child SKUs by drilling down to SKU central
+~/.vibe-seller/bin/<slug>/browser-use open \
+  "https://sellercentral.amazon.com/skucentral?mSku=<parent-sku>&condition=New"
+# This page has Sales/Pricing/Inventory tabs. The variations expand
+# is in the "Inventory" tab on most SKUs.
+```
+
+Faster path: bulk-download the existing campaigns from the store and
+read the `Sponsored Products Campaigns` sheet, filter Entity=Product Ad,
+look at the `SKU` column — that's the seller's canonical SKU naming
+scheme for that store. See `amazon-ads` § 2d for the bulk download
+flow; the resulting file lands in `~/.vibe-seller/downloads/<slug>/`.
+
+## The Ziniao download dir
+
+Files downloaded by Ziniao (CSV, XLSX, PDF) land in either:
+
+- the Ziniao-managed native dir (persistent) —
+  `~/Library/Application Support/ziniaobrowserdatas/ziniao browser/<slug>/`
+  on macOS; under `%LOCALAPPDATA%\ziniaobrowser` / Chrome's default
+  `%USERPROFILE%\Downloads` on native-Windows — or
+- `~/.vibe-seller/downloads/<slug>/` (per-store, the reliable one).
+
+Recent bulk-export XLSX files land in the second path because the CDP
+mux proxy pins Chrome's download path there via `Browser.setDownloadBehavior`
+(`cdp_mux_proxy.py` / `cdp_mux_upstream.py`) — **verified working on
+native-Windows too**, not just macOS. List most recent first:
+
+```bash
+ls -lt ~/.vibe-seller/downloads/<slug>/ | head -10
+```
+
+**Download-trigger gotcha (verified 2026-07-02, Ziniao/native-Windows).**
+The pinned path works, but a page's *visible* download link is often a
+`<p>`/label, not the clickable `<a>` — a coordinate/element click on the
+label silently fires **no** download and the dir stays empty, which reads
+as "the download dir is broken" when it isn't. Trigger the real anchor by
+`href` (JS `.click()` on `a[href*="…/download/…"]`, or `browser-use open
+<href>` — the latter returns a benign `net::ERR_ABORTED` but the file
+still lands). See `amazon-ads` mechanics § 2d for the worked example.
+Downloaded files carry Amazon's real name (`bulk-<entity>-<dates>-<ts>.xlsx`),
+never a fixed `BulkSheetExport.xlsx` — glob the newest `*.xlsx`, don't
+assume a name.
+
+## Capturing data → temp dir, never knowledge
+
+Per project policy: when you scrape live-store data (campaign keywords,
+coupon configs, ASINs, prices, screenshots), save to `/tmp/<task-slug>/`.
+**Never** under `~/.vibe-seller/knowledge/` — that path is for codified,
+reusable facts about Amazon/Noon/etc., NOT per-run private business
+data. The catalog gets synced into agent contexts, so private data
+there leaks across sessions.
+
+Skill files (this skill, `amazon-ads`, etc.) document the *patterns* of
+what worked, not the per-run captures.
+
+## Common confusions worth flagging early
+
+- **"slug" vs "name":** the wrapper directory `~/.vibe-seller/bin/<slug>/`
+  uses a slugified version of the store name. The DB `stores.name`
+  column may have spaces or non-ascii. They are NOT the same string
+  for some stores. The slug is what `bin/` and `downloads/` use.
+
+- **Unified multi-marketplace accounts:** one Amazon seller-id, several
+  marketplaces. Inventory differs (~10–20% of ASINs are listed on
+  some but not others). Listing-status enums differ between marketplaces
+  (read the live filter dropdown — one marketplace may omit a value
+  another includes). Custom Reports's All-Listings TSV is byte-identical
+  across the marketplaces' subdomains (account-level). Stranded Inventory is a single pool. When debugging
+  a specific listing, always specify which marketplace; "the inventory
+  for store X" is ambiguous.
+
+- **Two Amazon accounts per store:** the seller-central account
+  (sellercentral.amazon.com) and the advertising account
+  (advertising.amazon.com) can be on different underlying Amazon
+  accounts with different emails — even though SSO usually bridges
+  them. When debugging an "I logged in but it shows the wrong
+  account" issue, check the email in the Ziniao password-fill dialog
+  and the `entityId` in the ad-console URL — both indicate which
+  account is actually active.
+
+- **Browser sessions table != actual running daemons:** `browser_sessions`
+  in DB is what the queue-scheduler thinks is running. The actual
+  daemon processes are visible via `ps aux | grep skill_cli.daemon`.
+  These can drift apart (DB says `idle`, daemon is wedged; or DB says
+  `running`, daemon was killed). Trust `ps` for "what is actually
+  running"; trust DB for "what task-queue-scheduler will do next".
+
+- **The `aux` session for non-seller-center sites:** when you need to
+  visit `amazon.com/dp/<ASIN>` (public product page) for a probe
+  without disrupting the main seller-central session, use
+  `--session <slug>-aux` — the one override the wrapper allows in
+  task-mode. It is **not** "Chrome-direct": since wrapper format v3/v4
+  every session gets an explicit `BU_CDP_WS`, and for a Ziniao store
+  `-aux` is that store's own dedicated login-less Chromium on its own
+  proxy (see § Wrapper architecture above). The old endpoint-less
+  exemption is what let a daemon attach to a *different* store's
+  browser. `-aux` has **no seller login** — never use it for seller
+  central.
+
+## Things this skill is NOT
+
+- Not for end-user Amazon Ads / Coupons / Listings work — that's
+  `amazon-ads` + `new-product-launch`.
+- Not for noon — see `noon-seller`.
+- Not for the catalog/knowledge system itself (loading, sync, etc.) —
+  that's a different layer.

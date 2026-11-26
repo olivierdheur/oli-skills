@@ -273,6 +273,36 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "ComfyUI Dev",
     active: "bg-gradient-to-r from-lime-500 to-green-500 text-white shadow-lg shadow-lime-500/25",
   },
+  "amazon-sp": {
+    badge: "border-orange-400/50 bg-orange-50 text-orange-700 dark:border-orange-500/30 dark:bg-orange-950/50 dark:text-orange-300",
+    icon: "from-orange-500 to-amber-500",
+    label: "Amazon SP",
+    active: "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25",
+  },
+  "vibe-seller": {
+    badge: "border-yellow-400/50 bg-yellow-50 text-yellow-700 dark:border-yellow-500/30 dark:bg-yellow-950/50 dark:text-yellow-300",
+    icon: "from-yellow-500 to-orange-500",
+    label: "Vibe Seller",
+    active: "bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg shadow-yellow-500/25",
+  },
+  hasdata: {
+    badge: "border-emerald-400/50 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/50 dark:text-emerald-300",
+    icon: "from-emerald-500 to-teal-500",
+    label: "HasData",
+    active: "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25",
+  },
+  "growth-marketing": {
+    badge: "border-pink-400/50 bg-pink-50 text-pink-700 dark:border-pink-500/30 dark:bg-pink-950/50 dark:text-pink-300",
+    icon: "from-pink-500 to-rose-500",
+    label: "Growth Marketing",
+    active: "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/25",
+  },
+  fivetran: {
+    badge: "border-blue-400/50 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/50 dark:text-blue-300",
+    icon: "from-blue-500 to-indigo-500",
+    label: "Fivetran",
+    active: "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {
@@ -365,6 +395,11 @@ const categoryIcons: Record<string, string> = {
   "3D & Spatial": "🎮",
   "Audio Generation": "🎵",
   "Creative Direction": "🎨",
+  "Amazon": "📦",
+  "Shopify": "🛍️",
+  "Marketplace": "🏪",
+  "Inventory": "📋",
+  "Payments": "💳",
   "Specialist": "🎯",
 };
 
@@ -411,6 +446,11 @@ const sourceToPath: Record<string, string> = {
   comfiest: ".comfiest/skills",
   "media-skills": ".media-skills/skills",
   "comfyui-dev": ".comfyui-dev/skills",
+  "amazon-sp": ".amazon-sp/skills",
+  "vibe-seller": ".vibe-seller/skills",
+  hasdata: ".hasdata/skills",
+  "growth-marketing": ".growth-marketing/skills",
+  fivetran: ".fivetran/skills",
 };
 
 const suggestedSearches = [

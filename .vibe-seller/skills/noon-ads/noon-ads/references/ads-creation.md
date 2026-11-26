@@ -1,0 +1,185 @@
+# Noon Ads — Create Campaign Playbook
+
+For new Product Ads on noon Ad Manager. The click-by-click form
+mechanics are in [`campaign-editor.md`](campaign-editor.md); this file is
+the thinking — what to choose and why.
+
+- [When to use which targeting type](#when-to-use-which-targeting-type)
+- [Bidding strategy choice](#bidding-strategy-choice)
+- [Per-keyword bid](#per-keyword-bid-heuristic-for-first-launch)
+- [Match type](#match-type-choose-per-keyword-not-per-campaign)
+- [Negative keywords](#negative-keywords-scoping)
+- [Top-of-Search bid boost](#top-of-search-bid-boost)
+- [Budget](#budget-campaign-budget-vs-shared-budget)
+- [Campaign naming convention](#campaign-naming-convention)
+- [After launch — verification cadence](#after-launch--verification-cadence)
+
+Creating campaigns is a `create` phase: declare it with
+`vibe_seller_declare_ad_task` before touching the console
+(`../SKILL.md` § 0).
+
+## When to use which targeting type
+
+| Goal | Targeting | Why |
+|---|---|---|
+| Just-launched listing, no data yet | Auto first | Let noon's algorithm probe match terms; harvest queries from Customer Queries after 1–2 weeks. |
+| 2+ weeks live, Auto running but ROAS poor / off-target traffic | Add Manual alongside Auto | Manual locks in high-intent terms with lower CPCs; Auto stays for discovery. |
+| Listing has known buyer-side keywords (verified via storefront search) | Manual only | Skip Auto's noise. Faster to optimize, cheaper per click. |
+| Rescuing an under-performing listing | Manual + tight keyword list | Auto on a low-quality listing burns budget on bad matches; Manual gives you control. |
+
+## Bidding strategy choice
+
+Three options, but practically:
+- **Fixed** — the default for Manual Targeting. Per-keyword bids are
+  used as-is, so keyword performance reads without dynamic-bid noise,
+  which is what diagnosis needs.
+- **Dynamic Bid (Down Only)** — safer with Auto. noon throttles
+  bids on low-conversion impressions. Use when you want Auto but
+  are bid-shy.
+- **Dynamic Bid (Up & Down)** — Auto-only. Aggressive; noon may
+  bid up to 1.5× your bid when it expects an order. Best kept for a
+  proven listing: on a new one it bids up before you know it converts.
+
+## Per-keyword bid: heuristic for first launch
+
+The form pre-fills each target with noon's suggested bid, and offers
+a low/high suggested range.
+
+**noon's suggested range is a hint, not a ceiling.** Campaigns that win
+meaningful impression share tend to sit at or above the top of the
+range, and campaigns pinned to the top of it can still show
+single-digit SOI.
+
+**Prefer the store's own history over any rule of thumb.** Before
+picking a number, read what already works on this account:
+
+```bash
+# click-weighted bid distribution from earlier audits' targeting files
+#   store-data/<slug>/ads/noon/<cc>/*.tsv (not *.searchterms.tsv)  → bid, clicks, spend
+# report P25 / P50 / P75 and the realised CPC (spend / clicks), then start at ~P75
+```
+
+That gives an empirically-supported opening bid instead of a guess.
+Absent any history, start at the high end of noon's range and treat
+the first 3 days as calibration.
+
+**Then verify with SOI, not with ROAS.** Three days in, the question
+is "did impression share move?" (`../SKILL.md` § 4). ROAS at that
+point is noise on a low-volume site. If SOI did not move, decide
+between bid and relevance using
+`ads-tuning.md § Head terms vs modified terms` **before** raising
+again — bidding into a relevance wall just burns budget.
+
+Setting the bids: `campaign-editor.md` § Create: step 2 — the form.
+
+## Match type: choose per keyword, not per campaign
+
+An Exact-heavy campaign starves itself and a Phrase-everything
+campaign leaks. Decide per keyword, from where that keyword's volume
+actually sits:
+
+| Keyword shape | Match | Why |
+|---|---|---|
+| Qualified / multi-word (`<category> <audience>`, `<attribute> <category>`) | **Phrase** | The variants (`… <material>`, `… <length>`) are real, same-intent demand. The same term at the same bid can draw **orders of magnitude** more impressions as Phrase than as Exact — measure it on your own account before assuming Exact is "tighter and therefore better". |
+| Bare category noun with real volume | **Exact** | Phrase on a bare noun is where wrong-audience traffic enters (opposite gender, kids, competitor brand). Exact matches only the query itself, so the leak is structurally impossible. |
+| Proven converter (has orders in your own data) | **Exact**, bid up | You already know the intent converts; buy the exact query specifically. |
+| Your own or a competitor brand | **Exact** | Defend / siphon precisely. |
+
+> Bidding a bare category noun at all is a separate decision from
+> the match type — for many listings it is not worth buying. See
+> `ads-tuning.md § Head terms vs modified terms` first, and verify
+> on the store's own data.
+
+Note that `searches/month` is measured per exact string: word order
+matters and `<noun> <modifier>` may be several times bigger than
+`<modifier> <noun>`. Size both before choosing which to bid
+(`ads-keyword-research.md § Step 1`).
+
+## Negative keywords: scoping
+
+Cap is **100 Exact + 100 Phrase** per campaign (the counter under
+each box reads `N/100 … Selected`). Spend them on:
+
+| Negate | Match type | Why |
+|---|---|---|
+| Specific gender mismatch (e.g. opposite-gender token) | Exact | Single-token signal, cheap. |
+| Adjacent-but-wrong audience (e.g. `kids` on adult product) | Exact | Same. |
+| Multi-word irrelevant phrases (`return policy`, `for free`, `review`) | Phrase | Catches variations. |
+| Use-case mismatch (`for travel` on home-only product) | Phrase | Catches the concept. |
+| Direct competitor brand names | Exact | Stops bidding against direct rivals. |
+
+Add negatives BEFORE launch when you have a clear off-target risk
+list. Otherwise, harvest them from Customer Queries post-launch
+(see `ads-tuning.md`).
+
+## Top-of-Search bid boost
+
+`0%` to `900%` (integer field, blank = `0`). Boosts the effective bid
+for the top-of-search placement only; PDP and category placements use
+the base bid.
+
+**Default to `0%`.** The strongest-ROAS campaigns observed run `Top of
+Search 0%` with ordinary per-keyword bids. Check the account's own
+winners (the detail page shows `Top of Search N%`) before assuming a
+boost is needed.
+
+| Setting | When |
+|---|---|
+| **`0%`** | **Default.** Start here. Establish base-bid performance first — you cannot tell whether a boost helped if you never measured without it. |
+| Small boost (`≤100%`) | Only after ≥14 days show the keyword converts at base bid but sits low in SOI *and* the low SOI is a price problem, not a relevance one (`ads-tuning.md § Head terms vs modified terms`). |
+| Large boost | Rarely justified. It multiplies the cost of the placement you understand least. If you reach for this, say why in the recommendation and set a review date. |
+
+**Budget interaction — the reason `0%` matters on a small budget.**
+The boost multiplies the bid, so top-of-search clicks cost
+`bid × (1 + boost)`. On a small daily budget a large boost concentrates
+the whole day's spend into a couple of clicks, which produces no
+readable signal: e.g. a `250%` boost on a `1.00` bid makes a
+top-of-search click `3.50`, so a `15/day` budget buys ~4 of them.
+So boost and budget are best chosen together.
+
+## Budget: Campaign Budget vs Shared Budget
+
+**Campaign Budget** is the default for new diagnostic campaigns. Shared
+Budget pools spend across campaigns and obscures which one drove
+what, and diagnosis needs per-campaign isolation. Shared fits once
+the campaign is proven and you want portfolio-level allocation, or
+when the user asks for it.
+
+Maximum daily budget: the minimum is the marketplace floor (read it
+from the form rather than assuming a currency). For a diagnostic manual
+campaign, a small budget of ~30–50/day in the marketplace currency
+validates keyword performance
+within a week. Higher budgets just mean you waste money faster
+if the diagnosis was wrong.
+
+## Campaign naming convention
+
+Use the same scheme across stores so dashboards stay sortable:
+
+```
+<sku-or-product-id> <Targeting> <Country> - agent
+```
+
+Synthesized examples:
+- `widget-006 Manual SA - agent`
+- `widget-007 Auto AE - agent`
+- `widget-008-mix Manual SA - agent` (mixed-variant SKU)
+
+The trailing `- agent` flag distinguishes agent-created campaigns
+from human-created ones in the campaigns list. Keep the country
+code in the name even though noon scopes by project — it protects
+against confusion when one user manages multiple country projects.
+
+## After launch — verification cadence
+
+| When | What to verify |
+|---|---|
+| 30 min after launch | Status = Live (not Draft, not Pending Review). If Pending Review > 1 hour, check the policy notice (some restricted categories require manual review). |
+| Day 1 | Views > 0 across most keywords. Zero-view keywords on day 1 = bid likely below auction floor. |
+| Day 3 | Per-keyword CTR. < 1% over ≥10 Views = creative/match issue, not bid issue. |
+| Day 7 | First Orders. Read the funnel (`ads-tuning.md` § Report shape on noon) before any bid change. |
+| Day 14 | First reliable ROAS read. Anything earlier is statistical noise on a low-volume site. |
+
+By default, leave a new campaign untuned for its first 7 days unless
+something is *obviously* broken (e.g. 1000 views and 0 clicks — broken
+creative): noon's auction takes a few days to settle on a new campaign.

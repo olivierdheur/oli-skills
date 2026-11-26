@@ -1,0 +1,754 @@
+#!/usr/bin/env python3
+"""Amazon listing flat-file (category template) inspect + fill + feedback.
+
+Drives the "Add Products via Upload" round trip: download a category
+template (a macro-enabled `.xlsm` flat file), fill parent/child rows from
+a JSON spec, upload it, then parse the processing report Amazon returns.
+
+Why a script (vs. clicking the listing wizard)
+----------------------------------------------
+One template upload creates a whole variation family (a Parent plus N
+colour/size Children) in a single round trip. The per-field web wizard
+is one SKU at a time through shadow-DOM widgets. The flat file is the
+supported batch interface -- the same philosophy as `amazon-ads`'
+`ads_bulk.py`, but listing templates are **category-specific** (the
+column set differs per product type), so this tool cannot use a fixed
+positional schema. Instead it keys every field by its **field API name**
+(the row that contains the SKU column), which is identical in every
+console language -- only the human label row above it is localised.
+
+Two template dialects
+---------------------
+Amazon ships two flat-file templates and the tool auto-detects which:
+
+  legacy  (TemplateType=fptcustom) -- the classic flat file. Field API
+          names are bare: `item_sku`, `update_delete`, `parent_child`,
+          `relationship_type`, `variation_theme`, `parent_sku`,
+          `external_product_id[_type]`.
+  unified (NGS "Beta Product Spreadsheet") -- the current Seller Central
+          template. Every field name is decorated: the SKU is
+          `contribution_sku#1.value`, the operation is `::record_action`,
+          parentage is `parentage_level[marketplace_id=<id>]#1.value`, the
+          parent link is
+          `child_parent_sku_relationship[marketplace_id=<id>]#1.parent_sku`,
+          the theme is `variation_theme#1.name`, and the product id lives
+          in `amzn1.volt.ca.product_id{_type,_value}`.
+
+Every field the tool addresses by a friendly role (sku, operation,
+product_type, brand, parentage, parent_sku, variation_theme, product id,
+offer price) is resolved STRUCTURALLY from the header (`_Schema`), so the
+same spec drives either dialect. Fields not covered by a role are still
+addressed by their exact API name via the spec's `fields` map.
+
+Template geometry
+-----------------
+  legacy : row 1 TemplateType/signature | row 2 localised labels |
+           row 3 field API names <-- keyed | row 4+ data
+  unified: rows 1-4 settings/instructions/group/localised labels |
+           row 5 field API names <-- keyed | rows 6..dataRow-1 a SKIPPED
+           example region | data from `dataRow` (the row-1 settings blob's
+           `dataRow=N`, e.g. 8)
+The field-name row is found structurally (the row carrying the SKU field);
+data is written at `dataRow` (legacy: field-name row + 1), never by a
+guessed fixed number.
+
+The operation column (`update_delete` legacy / `::record_action`
+unified):
+  blank -> Create (the default when no ASIN is supplied)
+  update / partialupdate / delete map to each dialect's own tokens.
+Update-by-ASIN sets the product-id field to the ASIN and its type to
+`asin`.
+
+The template's own sheets are the source of truth for validation:
+  'Data Definitions'  -> which fields are Required
+  'Valid Values' / 'Dropdown Lists' -> the accepted enum tokens
+
+Fill preserves the workbook verbatim (macros, data validation, the
+signature row) and only writes data rows -- Amazon's validator keys on
+that untouched header block, so we never rebuild it.
+
+Usage
+-----
+  listing_bulk.py inspect  TEMPLATE.xlsm [--field NAME]
+  listing_bulk.py fill     TEMPLATE.xlsm --spec SPEC.json --out OUT.xlsm
+  listing_bulk.py parse-feedback  REPORT[.xlsm|.txt|.csv]
+
+Requires: openpyxl.
+"""
+
+import argparse
+import csv
+import os
+import shutil
+import sys
+
+try:
+    import openpyxl
+except ImportError:
+    sys.exit('error: openpyxl is required (pip install openpyxl)')
+
+# Global marketplace table + resolution, kept in a sibling data module.
+# The script dir is on sys.path when run as a CLI; add it for path-based
+# imports (tests) too.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Template structure + metadata parsing live in a sibling module so this
+# file stays within the line cap. Public names there; alias to the
+# `_`-prefixed internal names used here (and re-exported for tests).
+from listing_checks import (  # noqa: E402
+    apply_shortfall as _apply_shortfall,
+    battery_waived as _battery_waived,
+    enum_gate as _enum_gate,
+    merchant_stock_guard as _merchant_stock_guard,
+    report_batch_problem as _report_batch_problem,
+    report_outcome as _report_outcome,
+    scan_verdict_rows,
+    title_repeats as _title_repeats,
+    wire_value as _wire_value,
+)
+from listing_identity import (  # noqa: E402
+    mint_guard as _mint_guard,
+    ops_guard as _ops_guard,
+    row_guards as _row_guards,
+)
+from listing_library import (  # noqa: E402
+    after_fill,
+    gate_dirs,
+    load_spec,
+    report_saved,
+    spec_path_guard,
+    write_verdict as _write_verdict,
+)
+from listing_schema import (  # noqa: E402, F401
+    DEFN_SHEET,
+    DROPDOWN_SHEET,
+    OFFER_PRICE_SHORTHANDS as _OFFER_PRICE_SHORTHANDS,
+    OP_TOKENS as _OP_TOKENS,
+    ROLE_MATCHERS as _ROLE_MATCHERS,
+    TEMPLATE_SHEET,
+    Schema as _Schema,
+    base_attr as _base_attr,
+    data_start_row as _data_start_row,
+    expand_repeats as _expand_repeats,
+    field_columns as _field_columns,
+    find_header_row as _find_header_row,
+    is_sku_field as _is_sku_field,
+    load_required_fields as _load_required_fields,
+    load_valid_values as _load_valid_values,
+    match_fields as _match_fields,
+    nearest_columns as _nearest_columns,
+    our_price_col as _our_price_col,
+    resolve_operation as _resolve_operation,
+    route_offer_price as _route_offer_price,
+    row_fields as _row_fields,
+    stray_row_keys as _stray_row_keys,
+    valid_value_case as _valid_value_case,
+)
+from marketplace_ids import (  # noqa: E402,F401
+    COUNTRY_ALIASES as _COUNTRY_ALIASES,
+    MARKETPLACE_IDS,  # re-exported for callers/tests
+    browse_node_guard as _browse_node_guard,
+    fulfillment_index as _fulfillment_index_for_marketplace,
+    ids_in_template as _marketplace_ids_in_template,
+    label as _mkt_label,
+    resolve as _resolve_marketplace_id,
+    stamp_guard as _stamp_guard,
+)
+
+# Item Highlight (`title_differentiation`) is OPTIONAL and Amazon only
+# accepts it when Item Name is <= 75 chars; a longer title makes it
+# reject with 100476 (non-blocking SUCCESS-OTHER, leaves the SKU
+# flagged "Action required"). Marketing titles routinely exceed 75, so
+# `fill` drops the highlight when the title is too long; the value
+# belongs in `color_name`, never here.
+_ITEM_HIGHLIGHT_ATTR = 'title_differentiation'
+_ITEM_NAME_ATTR = 'item_name'
+_ITEM_HIGHLIGHT_MAX_TITLE = 75
+
+# A Parent row carries only shared catalogue data; offer, stock, images
+# and product-id live on Child rows -- so a Parent legitimately omits
+# these even when the template marks them Required (don't warn). Prefixes
+# cover both dialects (`color_name`/legacy id vs `color`/`amzn1.volt.ca`).
+CHILD_LEVEL_PREFIXES = (
+    'purchasable_offer',
+    'fulfillment_availability',
+    'main_image_url',
+    'main_product_image',
+    'other_image_url',
+    'other_product_image',
+    'swatch_image_url',
+    'external_product_id',
+    'amzn1.volt.ca.product_id',
+    'color_name',
+    'color[',
+    'size_name',
+    'size[',
+    'apparel_size',
+)
+
+# Battery / hazmat fields are marked Required but are only *conditionally*
+# required -- Amazon accepts them blank when the item has no batteries, so
+# suppress the noise when the row declares none.
+BATTERY_TOKENS = (
+    'battery',
+    'batteries',
+    'lithium',
+    'hazmat',
+    'ghs_classification',
+    'safety_data_sheet',
+    'flash_point',
+    'supplier_declared_dg',
+    'number_of_lithium',
+)
+
+
+def _keep_vba(path):
+    """Real Amazon templates are macro-enabled .xlsm (keep the macros and
+    the signature row); tolerate a plain .xlsx too (tests, blank forms)."""
+    return path.lower().endswith('.xlsm')
+
+
+def _export_tsv(ws, path):
+    """Write the Template sheet as a tab-delimited .txt (the upload file).
+
+    Amazon's flat-file processor rejects an openpyxl-saved `.xlsm` with a
+    90502 FATAL ("worksheet template type not supported for Excel
+    upload") because the re-save alters the macro-workbook structure it
+    validates. Its own remedy is to upload a tab-delimited text file, so
+    this is the artefact you actually upload -- the WHOLE sheet including
+    the settings/signature/label header block (Amazon's introspect-feed
+    keys on it to detect the file type), uniform column count so nothing
+    shifts.
+    """
+    max_c = ws.max_column
+    with open(path, 'w', newline='', encoding='utf-8') as fh:
+        w = csv.writer(fh, delimiter='\t', lineterminator='\n')
+        for row in ws.iter_rows():
+            w.writerow(
+                ['' if c.value is None else c.value for c in row][:max_c]
+            )
+
+
+def cmd_inspect(args):
+    wb = openpyxl.load_workbook(
+        args.file, read_only=False, keep_vba=_keep_vba(args.file)
+    )
+    ws = wb[TEMPLATE_SHEET]
+    header_row = _find_header_row(ws)
+    cols = _field_columns(ws, header_row)
+    schema = _Schema(cols)
+    required = _load_required_fields(wb)
+    valid = _load_valid_values(wb)
+
+    def dig(name):
+        v = valid.get(name)
+        return sorted(v) if v else None
+
+    if args.field:
+        term = args.field
+        names = _match_fields(term, cols, getattr(args, 'marketplace', None))
+        if not names:
+            print(f'field: {term} -- no column matches')
+            return
+        for name in names:
+            print(f'field: {name}')
+            print(f'  columns : {cols.get(name)}')
+            print(f'  required: {name in required}')
+            print(f'  values  : {dig(name)}')
+        return
+
+    tt = str(ws.cell(row=1, column=1).value or '')
+    op_field = schema.field('operation')
+    data_row = _data_start_row(ws, header_row)
+    print(f'template : {tt[:80]}')
+    print(f'dialect  : {schema.dialect}')
+    mkts = _marketplace_ids_in_template(cols)
+    if mkts:
+        # The template is REGION-STAMPED for these — verify the target
+        # marketplace is among them BEFORE filling.
+        print('marketplaces: ' + ', '.join(_mkt_label(m) for m in mkts))
+    print(f'sheets   : {wb.sheetnames}')
+    print(f'header at Excel row {header_row}; data starts row {data_row}')
+    print(f'total fields: {len(cols)}   required fields: {len(required)}')
+    print(
+        '\noperation column ({}): create=blank / partialupdate={} '
+        '(update needs --ops update; delete is disabled)'.format(
+            op_field, schema.op_tokens()['partialupdate']
+        )
+    )
+    # The resolved logical roles: the actual columns a spec's friendly keys
+    # (and offer-price routing) write to for THIS template's dialect.
+    print('\nresolved roles (friendly key -> the column it fills):')
+    for role in _ROLE_MATCHERS:
+        name = schema.field(role)
+        if name:
+            print(f'  {role:16} -> {name}   values={dig(name)}')
+    print('\nrequired fields:')
+    for f in sorted(required):
+        print(f'  {f:30} values={dig(f)}')
+
+
+def _drop_unusable_item_highlight(fields, i, sku, warnings):
+    """Drop an optional Item Highlight when the Item Name is too long.
+
+    Amazon only accepts `title_differentiation` (Item Highlight) when the
+    row's `item_name` is <= 75 chars; otherwise it returns error 100476 and
+    parks the SKU in "Action required" (SUCCESS OTHER). The field is
+    OPTIONAL, so a too-long title drops it with a warning. Mutates ``fields``.
+    """
+    hi = next(
+        (k for k in fields if _base_attr(k) == _ITEM_HIGHLIGHT_ATTR), None
+    )
+    if hi is None or not str(fields[hi]).strip():
+        return
+    name = next(
+        (v for k, v in fields.items() if _base_attr(k) == _ITEM_NAME_ATTR), ''
+    )
+    if len(str(name)) > _ITEM_HIGHLIGHT_MAX_TITLE:
+        dropped = fields.pop(hi)
+        warnings.append(
+            f'row {i} sku={sku}: dropped Item Highlight '
+            f'({hi}={dropped!r}) -- item_name is '
+            f'{len(str(name))} chars (> {_ITEM_HIGHLIGHT_MAX_TITLE}), which '
+            f'Amazon rejects with error 100476. Item Highlight is optional; '
+            f'put the colour in color_name, not here.'
+        )
+
+
+def cmd_fill(args):
+    spec = load_spec(args.spec)
+    rows = spec.get('rows') or []
+    if not rows:
+        raise SystemExit('error: spec has no rows')
+    # Every row's operation is checked before the template is copied, so a
+    # refused spec leaves no output file behind that looks uploadable.
+    allowed = getattr(args, 'ops', None)
+    _ops_guard(rows, allowed)
+    spec_path_guard(args.spec, args.out)
+
+    shutil.copyfile(args.file, args.out)
+    wb = openpyxl.load_workbook(
+        args.out, read_only=False, keep_vba=_keep_vba(args.out)
+    )
+    ws = wb[TEMPLATE_SHEET]
+    header_row = _find_header_row(ws)
+    cols = _field_columns(ws, header_row)
+    schema = _Schema(cols)
+    op_field = schema.field('operation')
+    required = _load_required_fields(wb)
+    valid = _load_valid_values(wb)
+    case = _valid_value_case(wb)
+
+    # Offer price is per-marketplace; resolve target (CLI --marketplace
+    # > spec "marketplace" > sole template stamp).
+    template_ids = _marketplace_ids_in_template(cols)
+    requested = getattr(args, 'marketplace', None) or spec.get('marketplace')
+    mkt_id = _resolve_marketplace_id(requested, template_ids)
+    # Guards (marketplace_ids): region-stamp mismatch + browse-node
+    # cross-marketplace fill (nodes are the template PRIMARY's only).
+    fatal, warn = _stamp_guard(requested, mkt_id, template_ids)
+    fatal = fatal or _browse_node_guard(rows, spec, mkt_id, ws, header_row)
+    # Identity: an undeclared mint, or an edit with no pinned ASIN, can
+    # move a SKU to another ASIN; row_guards also checks family shape.
+    fatal = fatal or _mint_guard(rows, spec, schema)
+    fatal = fatal or _row_guards(rows, spec, schema)
+    if fatal:  # a refused fill leaves no file that looks like output
+        os.remove(args.out)
+        raise SystemExit(fatal)
+    if warn:
+        print(warn, file=sys.stderr)
+
+    unknown_fields = set()
+    warnings = []
+    # Data begins at the template's data row (unified: `dataRow=N` from
+    # the settings blob, rows header_row+1..N-1 a SKIPPED example region;
+    # legacy: header_row+1). Writing into that skipped gap
+    # silently drops SKUs.
+    write_at = _data_start_row(ws, header_row)
+    # Clear everything below the field-name row, so the template's prefilled
+    # Example row (and its "do not delete this row" instruction row) or a
+    # reused workbook's stale rows can't upload as unintended SKUs; the gap
+    # rows above write_at are then re-emitted empty by the TSV export.
+    if ws.max_row > header_row:
+        ws.delete_rows(header_row + 1, ws.max_row - header_row)
+    for i, spec_row in enumerate(rows):
+        op_token, op_key = _resolve_operation(
+            spec_row.get('operation'), schema.dialect, allowed
+        )
+        fields = _row_fields(spec_row, spec, schema)
+        # A list value means a REPEATED field (5 bullet points, several
+        # materials): spread it across #1..#N of the target marketplace
+        # instead of collapsing it onto #1 and losing the rest.
+        fields, rep_warn = _expand_repeats(fields, schema, mkt_id)
+        warnings.extend(f'row {i}: {w}' for w in rep_warn)
+        # Map any bare/undecorated content field name to this template's
+        # actual column (unified decorates them), so the SAME spec fills
+        # either dialect. Offer shorthands (our_price/quantity) have no
+        # column of their own and pass through to _route_offer_price.
+        fields = {schema.resolve_field(k, mkt_id): v for k, v in fields.items()}
+        sku = fields.get(schema.field('sku'))
+        if not sku:
+            raise SystemExit(f'error: row {i} has no sku')
+
+        # Route the child offer price into the marketplace being listed on
+        # (a wrong `purchasable_offer` block leaves "Missing offer").
+        _route_offer_price(fields, cols, mkt_id, i, sku, warnings)
+        fatal = _merchant_stock_guard(fields, spec, i, sku)
+        if fatal:  # an undeclared FBM offer goes live when FBA runs dry
+            raise SystemExit(fatal)
+
+        # Drop an optional Item Highlight the title is too long for, so it
+        # can't poison the SKU with a 100476 rejection (SUCCESS OTHER).
+        _drop_unusable_item_highlight(fields, i, sku, warnings)
+
+        # An off-list value is a warning (see listing_checks.enum_gate); a
+        # title repeating a word 3+ times is a refusal Amazon would send.
+        allow = getattr(args, 'allow_unlisted_enum', None)
+        warn, fatal = _enum_gate(fields, valid, allow, i, sku)
+        warnings.extend(warn)
+        fatal = fatal or _title_repeats(fields, i, sku)
+        if fatal:
+            raise SystemExit(fatal)
+
+        # A key `fill` does not consume is a value the agent believes
+        # it set -- naming it beats an hour of latency and a 0/N reject.
+        strays = _stray_row_keys(spec_row)
+        if strays:
+            warnings.append(
+                f'row {i} sku={sku}: ignored row key(s) {strays} -- fill '
+                'does not read these at row level; move them into '
+                '"fields" (or use the documented friendly key)'
+            )
+
+        # product_type is "always required": without it the WHOLE feed
+        # is rejected 90041 before any row is evaluated.
+        pt_field = schema.field('product_type')
+        if (
+            op_key != 'delete'
+            and pt_field
+            and pt_field in cols
+            and not str(fields.get(pt_field) or '').strip()
+        ):
+            raise SystemExit(
+                f'error: row {i} sku={sku} has no {pt_field}. Amazon '
+                'rejects the ENTIRE feed with 90041 '
+                '("product_type#1.value is always required") when this '
+                'column is blank, so the upload cannot succeed. Set '
+                '"product_type" on the row or at the top of the spec.'
+            )
+
+        # Required-field guard: create and full update (which replaces the
+        # whole listing); a partialupdate touches only what it carries.
+        if op_key in ('create', 'update'):
+            parentage = fields.get(schema.field('parentage'), '')
+            is_parent = str(parentage).lower() == 'parent'
+            no_battery = _battery_waived(fields)
+            missing = []
+            for f in required:
+                if f not in cols or f in fields or f == op_field:
+                    continue
+                if is_parent and f.startswith(CHILD_LEVEL_PREFIXES):
+                    continue
+                if no_battery and any(t in f for t in BATTERY_TOKENS):
+                    continue
+                missing.append(f)
+            if missing:
+                warnings.append(
+                    f'row {i} sku={sku}: missing required field(s) '
+                    f'{sorted(missing)}'
+                )
+
+        target = ws[write_at + i]
+        # Operation column: write the token (blank cell = Create).
+        if op_field and op_field in cols:
+            target[cols[op_field][0] - 1].value = op_token or None
+        for fname, fval in fields.items():
+            if fname not in cols:
+                unknown_fields.add(fname)
+                continue
+            # Exact-case enum token (some fields are case-strict); a
+            # `label (id)` token is written as its bare id.
+            target[cols[fname][0] - 1].value = _wire_value(
+                fval,
+                case.get(fname, {}),
+                _COUNTRY_ALIASES if 'country' in fname else None,
+            )
+
+    wb.save(args.out)
+    # The upload artefact is a tab-delimited .txt, NOT this .xlsm (an
+    # openpyxl-saved .xlsm triggers Amazon's 90502 FATAL). Write it next
+    # to the .xlsm so the caller uploads the .txt.
+    txt_path = args.out.rsplit('.', 1)[0] + '.txt'
+    _export_tsv(ws, txt_path)
+    after_fill(args.out, spec, mkt_id)
+
+    for w in warnings:
+        print(f'warning: {w}', file=sys.stderr)
+    for miss in sorted(unknown_fields):
+        near = _nearest_columns(miss, cols)
+        hint = f' -- did you mean {near}?' if near else ''
+        print(
+            f'warning: {miss!r} is not a column in this template, so it '
+            f'was SKIPPED (its value never reaches Amazon){hint}',
+            file=sys.stderr,
+        )
+    # The browser (Ziniao/macOS) can't read /tmp, so uploading a /tmp file
+    # silently no-ops (Submit never enables). Nudge the caller to write
+    # under the store downloads dir instead.
+    if os.path.realpath(txt_path).startswith(('/tmp/', '/private/tmp/')):
+        print(
+            f'warning: {txt_path} is under /tmp -- the browser cannot read '
+            'it and the upload will silently fail. Write --out under '
+            '~/.vibe-seller/downloads/<slug>/ instead.',
+            file=sys.stderr,
+        )
+    print(f'wrote {len(rows)} data row(s) -> {args.out}')
+    print(
+        f'UPLOAD THIS (tab-delimited) -> {txt_path}  '
+        '(uploading the Excel file itself triggers a 90502 FATAL)'
+    )
+
+
+def _iter_report_rows(path):
+    """Yield rows from a processing report (.xlsm/.xlsx or .txt/.csv)."""
+    lower = path.lower()
+    if lower.endswith(('.xlsm', '.xlsx')):
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        for name in wb.sheetnames:
+            for row in wb[name].iter_rows(values_only=True):
+                yield [('' if c is None else str(c)) for c in row]
+        return
+    delim = '\t'
+    with open(path, encoding='utf-8', errors='replace') as fh:
+        sample = fh.readline()
+        if ',' in sample and '\t' not in sample:
+            delim = ','
+        fh.seek(0)
+        for line in fh:
+            yield line.rstrip('\n').split(delim)
+
+
+def _template_cell_errors(path):
+    """Per-field errors from a processing report's Template tab.
+
+    Amazon writes the precise, field-level fix as CELL COMMENTS (批注) on
+    the report's Template tab: the summary table gives code + message,
+    but the comment pins the exact column (field) to change. read_only
+    mode does not load comments, so open the workbook normally. Yields
+    (sku, field_api_name, comment_text) -- the self-correction targets.
+    """
+    if not path.lower().endswith(('.xlsm', '.xlsx')):
+        return
+    wb = openpyxl.load_workbook(path, data_only=True)
+    try:
+        if TEMPLATE_SHEET not in wb.sheetnames:
+            return
+        ws = wb[TEMPLATE_SHEET]
+        try:
+            header_row = _find_header_row(ws)
+        except ValueError:
+            return
+        names = {
+            c.column: str(c.value).strip() for c in ws[header_row] if c.value
+        }
+        sku_col = next(
+            (col for col, n in names.items() if _is_sku_field(n)), None
+        )
+        for row in ws.iter_rows(min_row=header_row + 1):
+            sku = ''
+            if sku_col is not None:
+                cell = next((c for c in row if c.column == sku_col), None)
+                sku = cell.value if cell and cell.value else ''
+            for c in row:
+                if not (c.comment and c.comment.text):
+                    continue
+                field = names.get(c.column, f'col{c.column}')
+                # A cell comment stacks several messages on Excel's literal
+                # `_x000d_` CR marker; split so each is one actionable line.
+                raw = str(c.comment.text).replace('_x000d_', '\n')
+                for line in raw.split('\n'):
+                    line = ' '.join(line.split())
+                    if line:
+                        yield (str(sku or '?'), field, line)
+    finally:
+        wb.close()
+
+
+def _report_comment_errors(path):
+    """Per-SKU errors from a processing summary's Template-tab CELL COMMENTS.
+
+    Amazon writes each error/warning as a cell comment on the Template tab
+    (orange = error, yellow = warning) keyed to the offending field's
+    column -- NOT as a table row. The comment is the only reliable error
+    source; a table scan lands on the localized instructions instead.
+    Returns [(sku, field, severity, message)].
+    """
+    if not path.lower().endswith(('.xlsm', '.xlsx')):
+        return []
+    try:
+        wb = openpyxl.load_workbook(path)
+    except Exception:
+        return []
+    if TEMPLATE_SHEET not in wb.sheetnames:
+        return []
+    ws = wb[TEMPLATE_SHEET]
+    try:
+        hdr = _find_header_row(ws)
+    except ValueError:
+        return []
+    names = [c.value for c in ws[hdr]]
+    sku_col = next(
+        (i for i, n in enumerate(names) if n and _is_sku_field(str(n))), None
+    )
+    if sku_col is None:
+        return []
+    out = []
+    for r in range(hdr + 1, ws.max_row + 1):
+        sku = ws.cell(r, sku_col + 1).value
+        if not sku:
+            continue
+        for c in ws[r]:
+            if not (c.comment and c.comment.text.strip()):
+                continue
+            field = names[c.column - 1] if c.column - 1 < len(names) else ''
+            text = ' '.join(c.comment.text.split())
+            sev = (
+                'error'
+                if text.lstrip().upper().startswith('ERROR')
+                else ('warning' if 'WARNING' in text[:20].upper() else 'info')
+            )
+            out.append((str(sku), str(field or ''), sev, text[:400]))
+    return out
+
+
+def cmd_parse_feedback(args):
+    """Summarise Amazon's processing report: per-SKU errors/warnings.
+
+    Prefer the Template-tab cell comments (the authoritative per-field
+    error source); fall back to a table scan for report layouts that use
+    one. A parent SKU's errors block its children -- fix the parent first.
+    """
+    problem = _report_batch_problem(
+        args.file, getattr(args, 'batch_id', None), gate_dirs()
+    )
+    if problem and problem.startswith('error:'):
+        raise SystemExit(problem)
+    if problem:
+        print(problem, file=sys.stderr)
+    comment_errs = _report_comment_errors(args.file)
+    rows = list(_iter_report_rows(args.file))
+    if comment_errs:
+        n_err = sum(1 for _s in comment_errs if _s[2] == 'error')
+        n_warn = sum(1 for _s in comment_errs if _s[2] == 'warning')
+        for sku, field, sev, msg in comment_errs:
+            print(f'  [{sev}] sku={sku} field={field}: {msg}')
+        print(
+            f'\n{n_err} error(s), {n_warn} warning(s) across '
+            f'{len({s for s, *_ in comment_errs})} SKU(s).'
+        )
+        # REAL reports take this path (cell comments): check + save here.
+        n_err = _apply_shortfall(rows, n_err, comment_errs)
+        _write_verdict(
+            getattr(args, 'batch_id', None),
+            n_err,
+            n_warn,
+            [m for _s, _f, sev, m in comment_errs if sev == 'error'],
+        )
+        report_saved(
+            getattr(args, 'batch_id', None), [m for *_x, m in comment_errs]
+        )
+        if _report_outcome(comment_errs, n_err):
+            sys.exit(1)  # non-zero, like the table-scan path below
+        return
+
+    if not rows:
+        raise SystemExit('error: empty report')
+
+    n_err, n_warn = scan_verdict_rows(rows)
+
+    # Field-level fixes live in the Template-tab cell comments (批注):
+    # category-specific and unbounded, so read from the report, not coded.
+    cell_errs = list(_template_cell_errors(args.file))
+    if cell_errs:
+        print(
+            '\nper-field cell comments (批注) -- fix the exact field each names:'
+        )
+        for sku, field, msg in cell_errs:
+            print(f'  sku={sku} field={field}: {msg}')
+        # The 批注 are the authoritative per-field verdict; the summary
+        # table above is often mislocated, so count from these instead.
+        c_err = sum(
+            1 for _, _, m in cell_errs if m.lstrip().upper().startswith('ERROR')
+        )
+        c_warn = sum(
+            1 for _, _, m in cell_errs if m.lstrip().upper().startswith('WARN')
+        )
+        if c_err or c_warn:
+            n_err, n_warn = c_err, c_warn
+
+    n_err = _apply_shortfall(rows, n_err)
+
+    print(f'\nsummary: {n_err} error(s), {n_warn} warning(s)')
+    _write_verdict(
+        getattr(args, 'batch_id', None),
+        n_err,
+        n_warn,
+        [m for _s, _f, m in cell_errs] if cell_errs else [],
+    )
+    report_saved(getattr(args, 'batch_id', None), [m for *_x, m in cell_errs])
+    if n_err:
+        sys.exit(1)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    sub = ap.add_subparsers(dest='cmd', required=True)
+
+    p = sub.add_parser('inspect', help='dump fields / required / enums')
+    p.add_argument('file')
+    p.add_argument('--field', help='detail for one field API name')
+    p.add_argument('--marketplace', help='with --field: one marketplace only')
+    p.set_defaults(func=cmd_inspect)
+
+    p = sub.add_parser('fill', help='write parent/child rows from a spec')
+    p.add_argument('file', help='the category template (.xlsm)')
+    p.add_argument('--spec', required=True, help='JSON spec of rows')
+    p.add_argument('--out', required=True, help='output .xlsm path')
+    p.add_argument(
+        '--marketplace',
+        help='country code (SA/AE/AU/…) or raw marketplace id you are '
+        'listing on; routes the offer price to the right block. Overrides '
+        'the spec\'s top-level "marketplace".',
+    )
+    p.add_argument(
+        '--allow-unlisted-enum',
+        action='append',
+        metavar='FIELD',
+        help="write FIELD's value although the valid-value sheet does not "
+        'list it (normally fatal: Amazon answers 90244). Names ONE field; '
+        'repeat it per field. Use only when that field is stale.',
+    )
+    p.add_argument(
+        '--ops',
+        action='append',
+        choices=('create', 'partialupdate', 'update'),
+        metavar='OP',
+        help='allow only these operations (repeatable); an edit passes '
+        '--ops partialupdate. update only when the user asked for a full '
+        'update by name; delete is disabled. Edit rows must pin the ASIN.',
+    )
+    p.set_defaults(func=cmd_fill)
+
+    p = sub.add_parser('parse-feedback', help='summarise a processing report')
+    p.add_argument('file')
+    p.add_argument(
+        '--batch-id',
+        help='write BATCH_<id>_VERDICT.json for the completion gate',
+    )
+    p.set_defaults(func=cmd_parse_feedback)
+
+    args = ap.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

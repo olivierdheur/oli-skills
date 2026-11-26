@@ -50,6 +50,11 @@ const SKILLS_DIRS = [
   { path: ".comfiest/skills", source: "comfiest" },
   { path: ".media-skills/skills", source: "media-skills" },
   { path: ".comfyui-dev/skills", source: "comfyui-dev" },
+  { path: ".amazon-sp/skills", source: "amazon-sp" },
+  { path: ".vibe-seller/skills", source: "vibe-seller" },
+  { path: ".hasdata/skills", source: "hasdata" },
+  { path: ".growth-marketing/skills", source: "growth-marketing" },
+  { path: ".fivetran/skills", source: "fivetran" },
 ];
 
 // Hierarchical category structure: "Parent > Subcategory"
@@ -60,6 +65,14 @@ const categoryPatterns = [
   { category: "Security > Dependencies", patterns: [/trim-reaper/i, /dependency.?reduc/i, /supply.?chain/i] },
   { category: "Security > Auth", patterns: [/auth/i, /oauth/i, /jwt/i, /session/i, /identity/i, /login/i] },
   { category: "Security > General", patterns: [/security/i, /vulnerab/i, /penetration/i, /owasp/i, /dread-forge/i, /secops/i, /appsec/i] },
+  
+  // E-commerce (before general business patterns)
+  { category: "E-commerce > Amazon", patterns: [/amazon/i, /fba/i, /asin/i, /seller.?central/i, /listing/i, /sp-api/i, /buybox/i] },
+  { category: "E-commerce > Shopify", patterns: [/shopify/i, /shopify.?store/i] },
+  { category: "E-commerce > Marketplace", patterns: [/noon/i, /walmart/i, /ebay/i, /etsy/i, /aliexpress/i, /marketplace/i] },
+  { category: "E-commerce > Inventory", patterns: [/inventory/i, /stockout/i, /fulfillment/i, /warehouse/i, /supply.?chain/i] },
+  { category: "E-commerce > Payments", patterns: [/stripe/i, /payment/i, /checkout/i, /cart/i, /refund/i] },
+  { category: "E-commerce > Analytics", patterns: [/store.?performance/i, /gmv/i, /aov/i, /cohort/i, /ltv/i, /repeat.?customer/i] },
   
   // Video & Image Generation (before general AI patterns)
   { category: "AI > Video Generation", patterns: [/video.?gen/i, /text.?to.?video/i, /image.?to.?video/i, /ai.?video/i, /runway/i, /luma/i, /kling/i, /pika/i, /sora/i, /veo/i, /seedance/i, /heygen/i, /synthesia/i, /avatar/i, /talking.?head/i, /video.?production/i, /video.?studio/i] },
