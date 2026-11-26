@@ -87,6 +87,12 @@ const sourceColors: Record<string, { badge: string; icon: string; label: string;
     label: "21st.dev",
     active: "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/25",
   },
+  bradautomates: {
+    badge: "border-lime-400/50 bg-lime-50 text-lime-700 dark:border-lime-500/30 dark:bg-lime-950/50 dark:text-lime-300",
+    icon: "from-lime-500 to-green-500",
+    label: "Brad Automates",
+    active: "bg-gradient-to-r from-lime-500 to-green-500 text-white shadow-lg shadow-lime-500/25",
+  },
 };
 
 const categoryIcons: Record<string, string> = {

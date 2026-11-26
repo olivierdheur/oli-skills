@@ -21,6 +21,7 @@ const SKILL_SOURCES = [
   { source: 'jmanico', path: '.jmanico/skills' },
   { source: 'heygen', path: '.heygen/skills' },
   { source: '21st', path: '.21st/skills' },
+  { source: 'bradautomates', path: '.bradautomates/skills' },
 ];
 
 console.log('Building oli-skills package...\n');
