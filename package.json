@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "node scripts/generate-skills-index.js",
+    "prebuild": "if [ -z \"$VERCEL\" ]; then node scripts/generate-skills-index.js; fi",
     "dev": "node scripts/generate-skills-index.js && next dev",
     "build": "next build",
     "start": "next start",
