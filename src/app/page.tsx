@@ -1,12 +1,21 @@
 import { getAllSkills } from "@/lib/skills";
 import { SkillsGrid } from "@/components/skills-grid";
+import { SkillsMixer } from "@/components/skills-mixer";
 import { UsageGuide } from "@/components/usage-guide";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HeaderClient } from "@/components/header-client";
+import { MainTabs } from "@/components/main-tabs";
 import { Suspense } from "react";
 
 export default function Home() {
   const skills = getAllSkills();
+  const skillsData = skills.map(s => ({ 
+    slug: s.slug, 
+    name: s.name, 
+    description: s.description, 
+    source: s.source, 
+    category: s.category 
+  }));
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-zinc-50 via-white to-zinc-100/50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
@@ -15,7 +24,7 @@ export default function Home() {
       <main className="max-w-6xl mx-auto px-6 py-8">
         <UsageGuide />
         <Suspense fallback={<div className="animate-pulse h-96 bg-zinc-100 dark:bg-zinc-800 rounded-2xl" />}>
-          <SkillsGrid skills={skills.map(s => ({ slug: s.slug, name: s.name, description: s.description, source: s.source, category: s.category }))} />
+          <MainTabs skills={skillsData} />
         </Suspense>
       </main>
 
